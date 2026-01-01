@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Câu Cá 2D - MySQL Version</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const API_URL = 'http://localhost:3001/api';
+
+        const FishIcon = ({ size = 24, color = "#000" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
+                <path d="M6.5 12c.94-3.46 4.94-6 8.5-6 3.56 0 6.06 2.54 7 6-1 3.46-3.44 6-7 6s-7.56-2.54-8.5-6Z"/>
+                <path d="M18 12v.5M16 17.5a2 2 0 0 0 2-2"/>
+                <path d="M20 12c0-.5 0-1-.09-1.5"/>
+            </svg>
+        );
+
+        const PackageIcon = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                <path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>
+            </svg>
+        );
+
+        const FishingGame = () => {
+            const [gameState, setGameState] = useState('login');
+            const [loginMode, setLoginMode] = useState('login');
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [confirmPassword, setConfirmPassword] = useState('');
+            const [currentUser, setCurrentUser] = useState(null);
+            const [userId, setUserId] = useState(null);
+            const [currentFish, setCurrentFish] = useState(null);
+            const [answer, setAnswer] = useState('');
+            const [timeLeft, setTimeLeft] = useState(0);
+            const [inventory, setInventory] = useState([]);
+            const [showInventory, setShowInventory] = useState(false);
+            const [inventoryTab, setInventoryTab] = useState('fish');
+            const [message, setMessage] = useState('');
+            const [money, setMoney] = useState(0);
+            const [showSellConfirm, setShowSellConfirm] = useState(false);
+            const [loading, setLoading] = useState(false);
+            const [showShop, setShowShop] = useState(false);
+            const [fishingRod, setFishingRod] = useState('normal');
+            const [ownedRods, setOwnedRods] = useState(['normal']);
+
+            const rarities = [
+                { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
+                { name: 'Uncommon', weight: 50, range: 20, time: 5, color: '#22C55E', price: 25 },
+                { name: 'Rare', weight: 30, range: 30, time: 6, color: '#3B82F6', price: 50 },
+                { name: 'Legendary', weight: 20, range: 40, time: 8, color: '#A855F7', price: 100 },
+                { name: 'Mythic', weight: 10, range: 50, time: 9, color: '#EF4444', price: 200 },
+                { name: 'Secret', weight: 1, range: 60, time: 10, color: '#F59E0B', price: 500 }
+            ];
+
+            const fishNames = {
+                'Common': ['Cá Rô', 'Cá Chép', 'Cá Trê', 'Cá Lóc'],
+                'Uncommon': ['Cá Hồi', 'Cá Ngừ', 'Cá Chim', 'Cá Basa'],
+                'Rare': ['Cá Kiếm', 'Cá Mập Nhỏ', 'Cá Voi Con', 'Cá Heo'],
+                'Legendary': ['Cá Mập Trắng', 'Cá Voi Xanh', 'Cá Sấu', 'Cá Rồng'],
+                'Mythic': ['Cá Rồng Vàng', 'Cá Phượng Hoàng', 'Cá Kỳ Lân', 'Leviathan'],
+                'Secret': ['Cá Thần', 'Poseidon', 'Kraken', 'Cá Rồng Cổ Đại']
+            };
+
+            const shopItems = [
+                {
+                    id: 'legendary_rod',
+                    name: 'New Rank Fish!',
+                    description: 'Giúp bạn câu được cá Legendary',
+                    price: 100,
+                    color: 'bg-green-600 hover:bg-green-700',
+                    unlocks: 'legendary'
+                },
+                {
+                    id: 'mythic_rod',
+                    name: 'Mythical Fishing Rod',
+                    description: 'Giúp bạn câu được cá Mythic',
+                    price: 300,
+                    color: 'bg-red-600 hover:bg-red-700',
+                    unlocks: 'mythic'
+                },
+                {
+                    id: 'secret_rod',
+                    name: 'Mysterious Fishing Rod',
+                    description: 'Giúp bạn câu được cá Secret',
+                    price: 500,
+                    color: 'bg-gray-900 hover:bg-gray-800',
+                    unlocks: 'secret'
+                }
+            ];
+
+            // Auto-save khi có thay đổi
+            useEffect(() => {
+                if (userId && (money > 0 || inventory.length > 0)) {
+                    const saveTimer = setTimeout(() => {
+                        saveGameData();
+                    }, 2000);
+                    return () => clearTimeout(saveTimer);
+                }
+            }, [money, fishingRod, ownedRods, userId]);
+
+            const saveGameData = async () => {
+                try {
+                    await fetch(`${API_URL}/save-game`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId, money, fishingRod, ownedRods })
+                    });
+                } catch (error) {
+                    console.error('Lỗi khi lưu:', error);
+                }
+            };
+
+            const handleRegister = async () => {
+                if (!username.trim() || username.length < 3) {
+                    alert('Tên tài khoản phải có ít nhất 3 ký tự!');
+                    return;
+                }
+                if (!password || password.length < 6) {
+                    alert('Mật khẩu phải có ít nhất 6 ký tự!');
+                    return;
+                }
+                if (password !== confirmPassword) {
+                    alert('Mật khẩu xác nhận không khớp!');
+                    return;
+                }
+
+                setLoading(true);
+                try {
+                    const response = await fetch(`${API_URL}/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        alert(data.error);
+                        setLoading(false);
+                        return;
+                    }
+
+                    alert('Đăng ký thành công! Đang đăng nhập...');
+                    setUserId(data.userId);
+                    setCurrentUser(data.username);
+                    setMoney(0);
+                    setInventory([]);
+                    setFishingRod('normal');
+                    setOwnedRods(['normal']);
+                    setGameState('menu');
+                } catch (error) {
+                    alert('Lỗi kết nối server: ' + error.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleLogin = async () => {
+                if (!username.trim() || !password) {
+                    alert('Vui lòng nhập đầy đủ thông tin!');
+                    return;
+                }
+
+                setLoading(true);
+                try {
+                    const response = await fetch(`${API_URL}/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        alert(data.error);
+                        setLoading(false);
+                        return;
+                    }
+
+                    setUserId(data.userId);
+                    setCurrentUser(data.username);
+                    
+                    if (data.gameData) {
+                        setMoney(data.gameData.money || 0);
+                        setFishingRod(data.gameData.fishing_rod || 'normal');
+                        setOwnedRods(JSON.parse(data.gameData.owned_rods || '["normal"]'));
+                    }
+
+                    const formattedInventory = data.inventory.map(fish => ({
+                        id: fish.id,
+                        name: fish.fish_name,
+                        rarity: fish.rarity,
+                        weight: parseFloat(fish.weight),
+                        price: fish.price,
+                        color: fish.colour,
+                        favourite: Boolean(fish.favourite)
+                    }));
+                    setInventory(formattedInventory);
+
+                    setGameState('menu');
+                } catch (error) {
+                    alert('Lỗi kết nối server: ' + error.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleLogout = () => {
+                if (window.confirm('Bạn có chắc muốn đăng xuất?')) {
+                    setUserId(null);
+                    setCurrentUser(null);
+                    setMoney(0);
+                    setInventory([]);
+                    setUsername('');
+                    setPassword('');
+                    setConfirmPassword('');
+                    setLoginMode('login');
+                    setGameState('login');
+                }
+            };
+
+            const getRandomRarity = () => {
+                let availableRarities = [...rarities];
+                
+                if (fishingRod === 'normal') {
+                    availableRarities = rarities.filter(r => 
+                        !['Legendary', 'Mythic', 'Secret'].includes(r.name)
+                    );
+                } else if (fishingRod === 'legendary') {
+                    availableRarities = rarities.filter(r => 
+                        !['Mythic', 'Secret'].includes(r.name)
+                    );
+                } else if (fishingRod === 'mythic') {
+                    availableRarities = rarities.filter(r => 
+                        r.name !== 'Secret'
+                    );
+                }
+                
+                const totalWeight = availableRarities.reduce((sum, r) => sum + r.weight, 0);
+                let random = Math.random() * totalWeight;
+                
+                for (let rarity of availableRarities) {
+                    random -= rarity.weight;
+                    if (random <= 0) return rarity;
+                }
+                return availableRarities[0];
+            };
+
+            const calculateWeight = () => {
+                let weight = 1.0;
+                let increaseChance = 1.0;
+                
+                while (Math.random() < increaseChance) {
+                    weight += 0.1;
+                    increaseChance -= 0.001;
+                }
+                
+                return Math.round(weight * 10) / 10;
+            };
+
+            const generateMath = (range) => {
+                const operations = ['+', '-'];
+                const op = operations[Math.floor(Math.random() * operations.length)];
+                const num1 = Math.floor(Math.random() * range) + 1;
+                const num2 = Math.floor(Math.random() * range) + 1;
+                
+                const question = `${num1} ${op} ${num2}`;
+                const correctAnswer = op === '+' ? num1 + num2 : num1 - num2;
+                
+                return { question, correctAnswer };
+            };
+
+            const startFishing = () => {
+                setGameState('fishing');
+                setMessage('');
+                
+                setTimeout(() => {
+                    const rarity = getRandomRarity();
+                    const fishName = fishNames[rarity.name][Math.floor(Math.random() * fishNames[rarity.name].length)];
+                    const weight = calculateWeight();
+                    const math = generateMath(rarity.range);
+                    const fishPrice = Math.round(rarity.price * weight);
+                    
+                    setCurrentFish({
+                        rarity: rarity.name,
+                        name: fishName,
+                        weight: weight,
+                        color: rarity.color,
+                        math: math,
+                        time: rarity.time,
+                        price: fishPrice,
+                        favourite: false
+                    });
+                    
+                    setTimeLeft(rarity.time);
+                    setGameState('question');
+                }, 1500);
+            };
+
+            useEffect(() => {
+                if (gameState === 'question' && timeLeft > 0) {
+                    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+                    return () => clearTimeout(timer);
+                } else if (gameState === 'question' && timeLeft === 0) {
+                    handleTimeout();
+                }
+            }, [timeLeft, gameState]);
+
+            const handleTimeout = () => {
+                setMessage('Hụt mất rồi!');
+                setGameState('result');
+                setTimeout(() => {
+                    setGameState('menu');
+                    setAnswer('');
+                }, 2000);
+            };
+
+            const checkAnswer = async () => {
+                const userAnswer = parseInt(answer);
+                
+                if (userAnswer === currentFish.math.correctAnswer) {
+                    try {
+                        await fetch(`${API_URL}/add-fish`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId, fish: currentFish })
+                        });
+
+                        setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
+                        
+                        const response = await fetch(`${API_URL}/login`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: currentUser, password })
+                        });
+                        const data = await response.json();
+                        const formattedInventory = data.inventory.map(fish => ({
+                            id: fish.id,
+                            name: fish.fish_name,
+                            rarity: fish.rarity,
+                            weight: parseFloat(fish.weight),
+                            price: fish.price,
+                            color: fish.colour,
+                            favourite: Boolean(fish.favourite)
+                        }));
+                        setInventory(formattedInventory);
+                        
+                        setGameState('result');
+                        setTimeout(() => {
+                            setGameState('menu');
+                            setAnswer('');
+                        }, 3000);
+                    } catch (error) {
+                        alert('Lỗi khi lưu cá: ' + error.message);
+                    }
+                } else {
+                    setMessage('Hụt mất rồi!');
+                    setGameState('result');
+                    setTimeout(() => {
+                        setGameState('menu');
+                        setAnswer('');
+                    }, 2000);
+                }
+            };
+
+            const toggleFavourite = async (index) => {
+                const fish = inventory[index];
+                const newFavourite = !fish.favourite;
+                
+                try {
+                    await fetch(`${API_URL}/toggle-favourite`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fishId: fish.id, favourite: newFavourite })
+                    });
+
+                    const newInventory = [...inventory];
+                    newInventory[index].favourite = newFavourite;
+                    setInventory(newInventory);
+                } catch (error) {
+                    alert('Lỗi khi cập nhật: ' + error.message);
+                }
+            };
+
+            const sellFish = async () => {
+                const fishToSell = inventory.filter(fish => !fish.favourite);
+                const totalMoney = fishToSell.reduce((sum, fish) => sum + fish.price, 0);
+                
+                try {
+                    await fetch(`${API_URL}/sell-fish`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId })
+                    });
+
+                    setMoney(money + totalMoney);
+                    setInventory(inventory.filter(fish => fish.favourite));
+                    setShowSellConfirm(false);
+                    
+                    if (fishToSell.length > 0) {
+                        setMessage(`Đã bán ${fishToSell.length} con cá và nhận được ${totalMoney} xu!`);
+                        setTimeout(() => setMessage(''), 3000);
+                    }
+                } catch (error) {
+                    alert('Lỗi khi bán cá: ' + error.message);
+                }
+            };
+
+            const buyRod = (item) => {
+                if (money < item.price) {
+                    alert('Bạn không đủ tiền để mua cần câu này!');
+                    return;
+                }
+
+                if (ownedRods.includes(item.unlocks)) {
+                    alert('Bạn đã có cần câu này rồi!');
+                    return;
+                }
+
+                setMoney(money - item.price);
+                setOwnedRods([...ownedRods, item.unlocks]);
+                setMessage(`✅ Đã mua ${item.name} thành công! Vào Balo để trang bị.`);
+                setTimeout(() => setMessage(''), 3000);
+            };
+
+            const equipRod = (rodType) => {
+                setFishingRod(rodType);
+                setMessage(`✅ Đã trang bị ${getRodNameByType(rodType)}!`);
+                setTimeout(() => setMessage(''), 2000);
+            };
+
+            const getRodName = () => {
+                return getRodNameByType(fishingRod);
+            };
+
+            const getRodNameByType = (type) => {
+                switch(type) {
+                    case 'legendary': return 'New Rank Fish!';
+                    case 'mythic': return 'Mythical Fishing Rod';
+                    case 'secret': return 'Mysterious Fishing Rod';
+                    default: return 'Normal Rod';
+                }
+            };
+
+            const getRodDescription = (type) => {
+                switch(type) {
+                    case 'legendary': return 'Câu được cá đến Legendary';
+                    case 'mythic': return 'Câu được cá đến Mythic';
+                    case 'secret': return 'Câu được tất cả loại cá';
+                    default: return 'Cần câu cơ bản';
+                }
+            };
+
+            const getRodColor = (type) => {
+                switch(type) {
+                    case 'legendary': return '#22C55E';
+                    case 'mythic': return '#EF4444';
+                    case 'secret': return '#1F2937';
+                    default: return '#9CA3AF';
+                }
+            };
+
+            if (gameState === 'login') {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800">
+                        <div className="bg-white rounded-xl shadow-2xl p-12 max-w-md w-full mx-4">
+                            <h1 className="text-4xl font-bold text-center mb-8 text-gray-800">🎣 Game Câu Cá 2D</h1>
+                            <p className="text-center text-sm text-green-600 font-semibold mb-4">✅ Kết nối MySQL Database</p>
+                            
+                            {loading ? (
+                                <div className="text-center text-gray-600 text-lg py-8">Đang xử lý...</div>
+                            ) : (
+                                <>
+                                    <div className="flex gap-2 mb-6">
+                                        <button
+                                            onClick={() => setLoginMode('login')}
+                                            className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                                loginMode === 'login' 
+                                                    ? 'bg-blue-600 text-white' 
+                                                    : 'bg-gray-300 text-gray-700'
+                                            }`}
+                                        >
+                                            Đăng nhập
+                                        </button>
+                                        <button
+                                            onClick={() => setLoginMode('register')}
+                                            className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                                loginMode === 'register' 
+                                                    ? 'bg-blue-600 text-white' 
+                                                    : 'bg-gray-300 text-gray-700'
+                                            }`}
+                                        >
+                                            Đăng ký
+                                        </button>
+                                    </div>
+
+                                    <input
+                                        type="text"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        placeholder="Tên tài khoản"
+                                        maxLength={20}
+                                        className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-purple-600"
+                                    />
+                                    
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder="Mật khẩu"
+                                        maxLength={50}
+                                        className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-purple-600"
+                                    />
+
+                                    {loginMode === 'register' && (
+                                        <input
+                                            type="password"
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="Xác nhận mật khẩu"
+                                            maxLength={50}
+                                            className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-purple-600"
+                                        />
+                                    )}
+
+                                    <button
+                                        onClick={loginMode === 'login' ? handleLogin : handleRegister}
+                                        className="w-full py-3 bg-blue-600 text-white text-xl font-bold rounded-lg hover:bg-blue-700 transition mb-4"
+                                    >
+                                        {loginMode === 'login' ? '🎮 Đăng nhập' : '📝 Đăng ký'}
+                                    </button>
+
+                                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                                        <p className="text-sm text-blue-800 font-semibold mb-2">
+                                            💡 Hướng dẫn cài đặt:
+                                        </p>
+                                        <ol className="text-xs text-blue-700 space-y-1 ml-4">
+                                            <li>1. Cài Node.js và MySQL</li>
+                                            <li>2. Chạy: npm install express mysql2 bcrypt cors</li>
+                                            <li>3. Khởi động server: node server.js</li>
+                                            <li>4. Mở file HTML này trên trình duyệt</li>
+                                        </ol>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (showInventory) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-blue-400 to-blue-600 p-8">
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                        </div>
+                        
+                        <div className="max-w-6xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-gray-800">🎒 Balo</h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowInventory(false);
+                                            setInventoryTab('fish');
+                                        }}
+                                        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setInventoryTab('fish')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            inventoryTab === 'fish' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🐟 Cá ({inventory.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setInventoryTab('rods')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            inventoryTab === 'rods' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🎣 Cần câu ({ownedRods.length})
+                                    </button>
+                                </div>
+                                
+                                {inventoryTab === 'fish' ? (
+                                    <div>
+                                        {inventory.length === 0 ? (
+                                            <p className="text-center text-gray-500 text-xl py-12">Chưa có cá nào trong balo!</p>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {inventory.map((fish, index) => (
+                                                    <div
+                                                        key={fish.id}
+                                                        className="border-4 rounded-lg p-4 relative"
+                                                        style={{ borderColor: fish.color }}
+                                                    >
+                                                        <button
+                                                            onClick={() => toggleFavourite(index)}
+                                                            className="absolute top-2 right-2 text-3xl hover:scale-110 transition"
+                                                        >
+                                                            {fish.favourite ? '⭐' : '☆'}
+                                                        </button>
+                                                        
+                                                        <div className="flex items-center gap-3 mb-2">
+                                                            <FishIcon size={32} color={fish.color} />
+                                                            <h3 className="text-xl font-bold" style={{ color: fish.color }}>
+                                                                {fish.name}
+                                                            </h3>
+                                                        </div>
+                                                        <div className="space-y-1 text-gray-700">
+                                                            <p><strong>Độ hiếm:</strong> {fish.rarity}</p>
+                                                            <p><strong>Cân nặng:</strong> {fish.weight} kg</p>
+                                                            <p><strong>Giá trị:</strong> {fish.price} xu</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {ownedRods.map((rodType, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="border-4 rounded-lg p-6 relative"
+                                                    style={{ borderColor: getRodColor(rodType) }}
+                                                >
+                                                    {fishingRod === rodType && (
+                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            ✓ Đang dùng
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-5xl mb-2">🎣</div>
+                                                        <h3 className="text-xl font-bold mb-2" style={{ color: getRodColor(rodType) }}>
+                                                            {getRodNameByType(rodType)}
+                                                        </h3>
+                                                        <p className="text-gray-600 text-sm mb-4">
+                                                            {getRodDescription(rodType)}
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    {fishingRod !== rodType && (
+                                                        <button
+                                                            onClick={() => equipRod(rodType)}
+                                                            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                        >
+                                                            Trang bị
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (showShop) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-purple-400 to-purple-600 p-8">
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                        </div>
+                        
+                        <div className="max-w-4xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-gray-800">🏪 Cửa Hàng Cần Câu</h2>
+                                    <button
+                                        onClick={() => setShowShop(false)}
+                                        className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                                    <p className="text-lg font-semibold text-blue-900">
+                                        🎣 Cần câu hiện tại: <span className="text-blue-600">{getRodName()}</span>
+                                    </p>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {shopItems.map((item) => {
+                                        const isOwned = ownedRods.includes(item.unlocks);
+                                        
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                className="border-4 border-gray-300 rounded-lg p-6 relative bg-gradient-to-b from-white to-gray-50"
+                                            >
+                                                {isOwned && (
+                                                    <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                        ✓ Đã mua
+                                                    </div>
+                                                )}
+                                                
+                                                <div className="text-center mb-4">
+                                                    <div className="text-5xl mb-3">🎣</div>
+                                                </div>
+                                                
+                                                <h3 className="text-2xl font-bold mb-2 text-gray-800">
+                                                    {item.name}
+                                                </h3>
+                                                <p className="text-gray-600 mb-4 min-h-12">
+                                                    {item.description}
+                                                </p>
+                                                <p className="text-3xl font-bold text-yellow-600 mb-4">
+                                                    💰 {item.price} xu
+                                                </p>
+                                                <button
+                                                    onClick={() => buyRod(item)}
+                                                    disabled={isOwned || money < item.price}
+                                                    className={`w-full py-3 text-white text-lg font-bold rounded-lg transition ${item.color} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                                                >
+                                                    {isOwned ? 'Đã sở hữu' : money < item.price ? 'Không đủ tiền' : 'Mua ngay'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className={`min-h-screen flex items-center justify-center transition-all duration-500 ${
+                    gameState === 'fishing' || gameState === 'question' 
+                        ? 'bg-gradient-to-b from-blue-400 to-blue-600' 
+                        : 'bg-gradient-to-b from-cyan-300 to-teal-400'
+                }`}>
+                    <div className="fixed top-4 left-4 bg-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3">
+                        <span className="text-lg">👤 <strong>{currentUser}</strong></span>
+                        <button
+                            onClick={handleLogout}
+                            className="bg-red-500 text-white px-4 py-1 rounded-md text-sm hover:bg-red-600 transition"
+                        >
+                            Đăng xuất
+                        </button>
+                    </div>
+
+                    <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                        <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                    </div>
+                    
+                    {message && gameState === 'menu' && (
+                        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-xl font-bold">{message}</p>
+                        </div>
+                    )}
+                    
+                    {showSellConfirm && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-lg p-8 max-w-md mx-4">
+                                <h3 className="text-2xl font-bold mb-4 text-gray-800">Xác nhận bán cá</h3>
+                                <p className="text-lg mb-6 text-gray-600">
+                                    Bạn có {inventory.filter(f => !f.favourite).length} con cá có thể bán
+                                    <br />
+                                    <span className="text-sm text-gray-500">(Cá được đánh dấu ⭐ sẽ không bị bán)</span>
+                                </p>
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={sellFish}
+                                        className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                                    >
+                                        Đồng ý
+                                    </button>
+                                    <button
+                                        onClick={() => setShowSellConfirm(false)}
+                                        className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                                    >
+                                        Hủy
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="text-center">
+                        {gameState === 'menu' && (
+                            <div className="space-y-6">
+                                <h1 className="text-5xl font-bold text-white mb-8 drop-shadow-lg">
+                                    🎣 Game Câu Cá 2D 🎣
+                                </h1>
+                                <button
+                                    onClick={startFishing}
+                                    className="px-12 py-4 bg-blue-600 text-white text-2xl rounded-lg hover:bg-blue-700 transform hover:scale-105 transition shadow-lg"
+                                >
+                                    Bắt đầu câu cá
+                                </button>
+                                
+                                <div className="flex gap-4 justify-center mt-6">
+                                    <button
+                                        onClick={() => setShowInventory(true)}
+                                        className="px-8 py-3 bg-green-600 text-white text-xl rounded-lg hover:bg-green-700 transform hover:scale-105 transition shadow-lg flex items-center gap-2"
+                                    >
+                                        <PackageIcon size={24} />
+                                        Balo ({inventory.length})
+                                    </button>
+                                    
+                                    <button
+                                        onClick={() => setShowShop(true)}
+                                        className="px-8 py-3 bg-purple-600 text-white text-xl rounded-lg hover:bg-purple-700 transform hover:scale-105 transition shadow-lg"
+                                    >
+                                        🏪 Cửa hàng
+                                    </button>
+                                    
+                                    <button
+                                        onClick={() => setShowSellConfirm(true)}
+                                        disabled={inventory.filter(f => !f.favourite).length === 0}
+                                        className="px-8 py-3 bg-orange-600 text-white text-xl rounded-lg hover:bg-orange-700 transform hover:scale-105 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                    >
+                                        💵 Bán cá
+                                    </button>
+                                </div>
+
+                                <div className="mt-6 p-4 bg-white bg-opacity-50 rounded-lg">
+                                    <p className="text-lg font-semibold text-gray-800">
+                                        🎣 Cần câu: <span className="text-blue-600">{getRodName()}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {gameState === 'fishing' && (
+                            <div className="bg-white bg-opacity-90 rounded-lg p-12 shadow-2xl">
+                                <h2 className="text-4xl font-bold text-blue-600 animate-pulse">
+                                    Cá đã cắn câu! 🎣
+                                </h2>
+                            </div>
+                        )}
+
+                        {gameState === 'question' && currentFish && (
+                            <div className="bg-white rounded-lg p-8 shadow-2xl max-w-md">
+                                <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: currentFish.color + '20' }}>
+                                    <div className="flex justify-center mb-2">
+                                        <FishIcon size={48} color={currentFish.color} />
+                                    </div>
+                                    <h2 className="text-2xl font-bold mb-2" style={{ color: currentFish.color }}>
+                                        {currentFish.name}
+                                    </h2>
+                                    <p className="text-lg"><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
+                                    <p className="text-lg"><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
+                                </div>
+
+                                <div className="my-4 p-4 bg-gray-100 rounded-lg">
+                                    <p className="text-3xl font-bold text-gray-800 mb-4">
+                                        {currentFish.math.question} = ?
+                                    </p>
+                                    <p className="text-xl text-red-500 font-bold">
+                                        Thời gian: {timeLeft}s
+                                    </p>
+                                </div>
+
+                                <input
+                                    type="number"
+                                    value={answer}
+                                    onChange={(e) => setAnswer(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && checkAnswer()}
+                                    placeholder="Nhập câu trả lời"
+                                    className="w-full px-4 py-3 text-xl border-2 border-gray-300 rounded-lg mb-4 text-center"
+                                    autoFocus
+                                />
+
+                                <button
+                                    onClick={checkAnswer}
+                                    className="w-full px-6 py-3 bg-green-600 text-white text-xl rounded-lg hover:bg-green-700 transition"
+                                >
+                                    Trả lời
+                                </button>
+                            </div>
+                        )}
+
+                        {gameState === 'result' && (
+                            <div className="bg-white rounded-lg p-12 shadow-2xl max-w-md">
+                                <p className="text-2xl font-bold text-gray-800">
+                                    {message}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<FishingGame />);
+    </script>
+</body>
+</html>
