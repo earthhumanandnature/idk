@@ -22,13 +22,12 @@
 
         // ⚠️ THAY ĐỔI CONFIG NÀY BẰNG FIREBASE CONFIG CỦA BẠN
         const firebaseConfig = {
-          apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
-          authDomain: "fishing-game-b3de4.firebaseapp.com",
-          projectId: "fishing-game-b3de4",
-          storageBucket: "fishing-game-b3de4.firebasestorage.app",
-          messagingSenderId: "995387752934",
-          appId: "1:995387752934:web:ccb5c73999a23d7715d627",
-          measurementId: "G-2BYJH3JMTZ"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         // Khởi tạo Firebase
@@ -78,6 +77,9 @@
             const [currentBait, setCurrentBait] = useState('normal');
             const [ownedBaits, setOwnedBaits] = useState(['normal']);
             const [configError, setConfigError] = useState(false);
+            const [showLeaderboard, setShowLeaderboard] = useState(false);
+            const [leaderboardTab, setLeaderboardTab] = useState('fish');
+            const [leaderboardData, setLeaderboardData] = useState([]);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -200,6 +202,13 @@
                 }
             }, [money, fishingRod, ownedRods, currentBait, ownedBaits, userId]);
 
+            // Load leaderboard when opened or tab changes
+            useEffect(() => {
+                if (showLeaderboard) {
+                    loadLeaderboard();
+                }
+            }, [showLeaderboard, leaderboardTab]);
+
             const loadGameData = async (uid) => {
                 try {
                     const gameDoc = await db.collection('users').doc(uid).get();
@@ -218,8 +227,51 @@
                         ...doc.data()
                     }));
                     setInventory(fishList);
+                    
+                    // Update leaderboard
+                    await updateLeaderboard(uid, fishList.length);
                 } catch (error) {
                     console.error('Lỗi khi tải dữ liệu:', error);
+                }
+            };
+
+            const updateLeaderboard = async (uid, totalFish = null) => {
+                if (!uid) return;
+                try {
+                    const userDoc = await db.collection('users').doc(uid).get();
+                    if (!userDoc.exists) return;
+                    
+                    const userData = userDoc.data();
+                    const currentTotalFish = totalFish !== null ? totalFish : inventory.length;
+                    
+                    await db.collection('leaderboard').doc(uid).set({
+                        email: userData.email || currentUser,
+                        totalFish: currentTotalFish,
+                        money: userData.money || money,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } catch (error) {
+                    console.error('Lỗi khi cập nhật leaderboard:', error);
+                }
+            };
+
+            const loadLeaderboard = async () => {
+                try {
+                    const snapshot = await db.collection('leaderboard')
+                        .orderBy(leaderboardTab === 'fish' ? 'totalFish' : 'money', 'desc')
+                        .limit(10)
+                        .get();
+                    
+                    const data = snapshot.docs.map((doc, index) => ({
+                        id: doc.id,
+                        rank: index + 1,
+                        ...doc.data()
+                    }));
+                    
+                    setLeaderboardData(data);
+                } catch (error) {
+                    console.error('Lỗi khi tải leaderboard:', error);
+                    setLeaderboardData([]);
                 }
             };
 
@@ -234,6 +286,9 @@
                         ownedBaits,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
+                    
+                    // Update leaderboard
+                    await updateLeaderboard(userId);
                 } catch (error) {
                     console.error('Lỗi khi lưu:', error);
                 }
@@ -1016,6 +1071,246 @@
                 );
             }
 
+            if (showLeaderboard) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-yellow-400 to-orange-500 p-8">
+                        <div className="max-w-4xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-gray-800">🏆 Bảng Xếp Hạng</h2>
+                                    <button
+                                        onClick={() => setShowLeaderboard(false)}
+                                        className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setLeaderboardTab('fish')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            leaderboardTab === 'fish' 
+                                                ? 'bg-orange-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🐟 Số Cá
+                                    </button>
+                                    <button
+                                        onClick={() => setLeaderboardTab('money')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            leaderboardTab === 'money' 
+                                                ? 'bg-orange-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        💰 Tiền
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {leaderboardData.length === 0 ? (
+                                        <p className="text-center text-gray-500 text-xl py-12">Chưa có dữ liệu xếp hạng!</p>
+                                    ) : (
+                                        leaderboardData.map((player) => {
+                                            const isCurrentUser = player.id === userId;
+                                            const rankColor = player.rank === 1 ? 'bg-yellow-400' : 
+                                                            player.rank === 2 ? 'bg-gray-300' : 
+                                                            player.rank === 3 ? 'bg-orange-400' : 
+                                                            'bg-blue-100';
+                                            
+                                            return (
+                                                <div
+                                                    key={player.id}
+                                                    className={`flex items-center gap-4 p-4 rounded-lg ${
+                                                        isCurrentUser ? 'bg-green-100 border-2 border-green-500' : 'bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <div className={`${rankColor} w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl`}>
+                                                        {player.rank === 1 ? '🥇' : 
+                                                         player.rank === 2 ? '🥈' : 
+                                                         player.rank === 3 ? '🥉' : 
+                                                         `#${player.rank}`}
+                                                    </div>
+                                                    
+                                                    <div className="flex-1">
+                                                        <p className="font-bold text-lg text-gray-800">
+                                                            {player.email}
+                                                            {isCurrentUser && <span className="ml-2 text-green-600">(Bạn)</span>}
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    <div className="text-right">
+                                                        {leaderboardTab === 'fish' ? (
+                                                            <p className="text-2xl font-bold text-blue-600">
+                                                                🐟 {player.totalFish} con
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-2xl font-bold text-yellow-600">
+                                                                💰 {player.money} xu
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-purple-400 to-purple-600 p-8">
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                        </div>
+                        
+                        <div className="max-w-6xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-gray-800">🪝 Cửa Hàng</h2>
+                                    <button
+                                        onClick={() => setShowShop(false)}
+                                        className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setShopTab('rods')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            shopTab === 'rods' 
+                                                ? 'bg-purple-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🎣 Cần Câu
+                                    </button>
+                                    <button
+                                        onClick={() => setShopTab('baits')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            shopTab === 'baits' 
+                                                ? 'bg-purple-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🪱 Mồi Câu
+                                    </button>
+                                </div>
+
+                                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                                    <p className="text-lg font-semibold text-blue-900">
+                                        🎣 Cần câu: <span className="text-blue-600">{getRodName()}</span>
+                                        <span className="mx-2">|</span>
+                                        🪱 Mồi: <span className="text-green-600">{baitInfo[currentBait].name}</span>
+                                    </p>
+                                </div>
+                                
+                                {shopTab === 'rods' ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {shopItems.map((item) => {
+                                            const isOwned = ownedRods.includes(item.unlocks);
+                                            
+                                            return (
+                                                <div
+                                                    key={item.id}
+                                                    className="border-4 border-gray-300 rounded-lg p-6 relative bg-gradient-to-b from-white to-gray-50"
+                                                >
+                                                    {isOwned && (
+                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            ✓ Đã mua
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-5xl mb-3">🎣</div>
+                                                    </div>
+                                                    
+                                                    <h3 className="text-2xl font-bold mb-2 text-gray-800">
+                                                        {item.name}
+                                                    </h3>
+                                                    <p className="text-gray-600 mb-4 min-h-12">
+                                                        {item.description}
+                                                    </p>
+                                                    <p className="text-3xl font-bold text-yellow-600 mb-4">
+                                                        💰 {item.price} xu
+                                                    </p>
+                                                    <button
+                                                        onClick={() => buyRod(item)}
+                                                        disabled={isOwned || money < item.price}
+                                                        className={`w-full py-3 text-white text-lg font-bold rounded-lg transition ${item.color} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                                                    >
+                                                        {isOwned ? 'Đã sở hữu' : money < item.price ? 'Không đủ tiền' : 'Mua ngay'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {Object.entries(baitInfo).filter(([key]) => key !== 'normal').map(([baitType, bait]) => {
+                                            const isOwned = ownedBaits.includes(baitType);
+                                            
+                                            return (
+                                                <div
+                                                    key={baitType}
+                                                    className="border-4 rounded-lg p-6 relative bg-gradient-to-b from-white to-gray-50"
+                                                    style={{ borderColor: bait.color }}
+                                                >
+                                                    {isOwned && (
+                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            ✓ Đã mua
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-6xl mb-3">{bait.icon}</div>
+                                                        <h3 className="text-2xl font-bold mb-2" style={{ color: bait.color }}>
+                                                            {bait.name}
+                                                        </h3>
+                                                        <p className="text-gray-600 mb-4 min-h-12">
+                                                            {bait.description}
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    <div className="mb-4 text-sm text-gray-700">
+                                                        <p className="font-bold mb-2">Giảm độ khó:</p>
+                                                        <div className="space-y-1">
+                                                            <p>Common: {bait.difficulty.Common}%</p>
+                                                            <p>Uncommon: {bait.difficulty.Uncommon}%</p>
+                                                            <p>Rare: {bait.difficulty.Rare}%</p>
+                                                            <p>Legendary: {bait.difficulty.Legendary}%</p>
+                                                            <p>Mythic: {bait.difficulty.Mythic}%</p>
+                                                            <p>Secret: {bait.difficulty.Secret}%</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <p className="text-3xl font-bold text-yellow-600 mb-4">
+                                                        💰 {bait.price} xu
+                                                    </p>
+                                                    <button
+                                                        onClick={() => buyBait(baitType)}
+                                                        disabled={isOwned || money < bait.price}
+                                                        className="w-full py-3 text-white text-lg font-bold rounded-lg transition bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                                    >
+                                                        {isOwned ? 'Đã sở hữu' : money < bait.price ? 'Không đủ tiền' : 'Mua ngay'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className={`min-h-screen flex items-center justify-center transition-all duration-500 ${
                     gameState === 'fishing' || gameState === 'question' 
@@ -1107,6 +1402,15 @@
                                     </button>
                                 </div>
 
+                                <div className="flex justify-center mt-4">
+                                    <button
+                                        onClick={() => setShowLeaderboard(true)}
+                                        className="px-8 py-3 bg-yellow-500 text-white text-xl rounded-lg hover:bg-yellow-600 transform hover:scale-105 transition shadow-lg"
+                                    >
+                                        🏆 Bảng Xếp Hạng
+                                    </button>
+                                </div>
+
                                 <div className="mt-6 p-4 bg-white bg-opacity-50 rounded-lg space-y-2">
                                     <p className="text-lg font-semibold text-gray-800">
                                         🎣 Cần câu: <span className="text-blue-600">{getRodName()}</span>
@@ -1187,4 +1491,3 @@
     </script>
 </body>
 </html>
-
