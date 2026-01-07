@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game Câu Cá 2D - MySQL Version</title>
+    <title>Game Câu Cá 2D - Firebase Version</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div id="root"></div>
@@ -15,7 +20,23 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        const API_URL = 'http://localhost:3001/api';
+        // ⚠️ THAY ĐỔI CONFIG NÀY BẰNG FIREBASE CONFIG CỦA BẠN
+        const firebaseConfig = {
+          apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
+          authDomain: "fishing-game-b3de4.firebaseapp.com",
+          projectId: "fishing-game-b3de4",
+          storageBucket: "fishing-game-b3de4.firebasestorage.app",
+          messagingSenderId: "995387752934",
+          appId: "1:995387752934:web:ccb5c73999a23d7715d627",
+          measurementId: "G-2BYJH3JMTZ"
+        };
+
+        // Khởi tạo Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
         const FishIcon = ({ size = 24, color = "#000" }) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
@@ -35,7 +56,7 @@
         const FishingGame = () => {
             const [gameState, setGameState] = useState('login');
             const [loginMode, setLoginMode] = useState('login');
-            const [username, setUsername] = useState('');
+            const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [confirmPassword, setConfirmPassword] = useState('');
             const [currentUser, setCurrentUser] = useState(null);
@@ -53,6 +74,7 @@
             const [showShop, setShowShop] = useState(false);
             const [fishingRod, setFishingRod] = useState('normal');
             const [ownedRods, setOwnedRods] = useState(['normal']);
+            const [configError, setConfigError] = useState(false);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -99,9 +121,29 @@
                 }
             ];
 
-            // Auto-save khi có thay đổi
+            // Kiểm tra Firebase config
             useEffect(() => {
-                if (userId && (money > 0 || inventory.length > 0)) {
+                if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+                    setConfigError(true);
+                }
+            }, []);
+
+            // Lắng nghe trạng thái đăng nhập
+            useEffect(() => {
+                const unsubscribe = auth.onAuthStateChanged(async (user) => {
+                    if (user) {
+                        setUserId(user.uid);
+                        setCurrentUser(user.email);
+                        await loadGameData(user.uid);
+                        setGameState('menu');
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
+
+            // Auto-save game data
+            useEffect(() => {
+                if (userId && gameState === 'menu') {
                     const saveTimer = setTimeout(() => {
                         saveGameData();
                     }, 2000);
@@ -109,21 +151,46 @@
                 }
             }, [money, fishingRod, ownedRods, userId]);
 
-            const saveGameData = async () => {
+            const loadGameData = async (uid) => {
                 try {
-                    await fetch(`${API_URL}/save-game`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId, money, fishingRod, ownedRods })
-                    });
+                    // Load game data
+                    const gameDoc = await db.collection('users').doc(uid).get();
+                    if (gameDoc.exists) {
+                        const data = gameDoc.data();
+                        setMoney(data.money || 0);
+                        setFishingRod(data.fishingRod || 'normal');
+                        setOwnedRods(data.ownedRods || ['normal']);
+                    }
+
+                    // Load inventory
+                    const inventorySnapshot = await db.collection('users').doc(uid).collection('inventory').get();
+                    const fishList = inventorySnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    setInventory(fishList);
+                } catch (error) {
+                    console.error('Lỗi khi tải dữ liệu:', error);
+                }
+            };
+
+            const saveGameData = async () => {
+                if (!userId) return;
+                try {
+                    await db.collection('users').doc(userId).set({
+                        money,
+                        fishingRod,
+                        ownedRods,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
                 } catch (error) {
                     console.error('Lỗi khi lưu:', error);
                 }
             };
 
             const handleRegister = async () => {
-                if (!username.trim() || username.length < 3) {
-                    alert('Tên tài khoản phải có ít nhất 3 ký tự!');
+                if (!email.trim() || !email.includes('@')) {
+                    alert('Vui lòng nhập email hợp lệ!');
                     return;
                 }
                 if (!password || password.length < 6) {
@@ -137,92 +204,61 @@
 
                 setLoading(true);
                 try {
-                    const response = await fetch(`${API_URL}/register`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, password })
+                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                    const user = userCredential.user;
+                    
+                    // Khởi tạo dữ liệu game mới
+                    await db.collection('users').doc(user.uid).set({
+                        email: user.email,
+                        money: 0,
+                        fishingRod: 'normal',
+                        ownedRods: ['normal'],
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
-                    const data = await response.json();
-
-                    if (!response.ok) {
-                        alert(data.error);
-                        setLoading(false);
-                        return;
-                    }
-
-                    alert('Đăng ký thành công! Đang đăng nhập...');
-                    setUserId(data.userId);
-                    setCurrentUser(data.username);
-                    setMoney(0);
-                    setInventory([]);
-                    setFishingRod('normal');
-                    setOwnedRods(['normal']);
-                    setGameState('menu');
+                    alert('Đăng ký thành công!');
                 } catch (error) {
-                    alert('Lỗi kết nối server: ' + error.message);
+                    if (error.code === 'auth/email-already-in-use') {
+                        alert('Email này đã được sử dụng!');
+                    } else {
+                        alert('Lỗi đăng ký: ' + error.message);
+                    }
                 } finally {
                     setLoading(false);
                 }
             };
 
             const handleLogin = async () => {
-                if (!username.trim() || !password) {
+                if (!email.trim() || !password) {
                     alert('Vui lòng nhập đầy đủ thông tin!');
                     return;
                 }
 
                 setLoading(true);
                 try {
-                    const response = await fetch(`${API_URL}/login`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username, password })
-                    });
-
-                    const data = await response.json();
-
-                    if (!response.ok) {
-                        alert(data.error);
-                        setLoading(false);
-                        return;
-                    }
-
-                    setUserId(data.userId);
-                    setCurrentUser(data.username);
-                    
-                    if (data.gameData) {
-                        setMoney(data.gameData.money || 0);
-                        setFishingRod(data.gameData.fishing_rod || 'normal');
-                        setOwnedRods(JSON.parse(data.gameData.owned_rods || '["normal"]'));
-                    }
-
-                    const formattedInventory = data.inventory.map(fish => ({
-                        id: fish.id,
-                        name: fish.fish_name,
-                        rarity: fish.rarity,
-                        weight: parseFloat(fish.weight),
-                        price: fish.price,
-                        color: fish.colour,
-                        favourite: Boolean(fish.favourite)
-                    }));
-                    setInventory(formattedInventory);
-
-                    setGameState('menu');
+                    await auth.signInWithEmailAndPassword(email, password);
                 } catch (error) {
-                    alert('Lỗi kết nối server: ' + error.message);
+                    if (error.code === 'auth/user-not-found') {
+                        alert('Tài khoản không tồn tại!');
+                    } else if (error.code === 'auth/wrong-password') {
+                        alert('Mật khẩu không đúng!');
+                    } else {
+                        alert('Lỗi đăng nhập: ' + error.message);
+                    }
                 } finally {
                     setLoading(false);
                 }
             };
 
-            const handleLogout = () => {
+            const handleLogout = async () => {
                 if (window.confirm('Bạn có chắc muốn đăng xuất?')) {
+                    await saveGameData();
+                    await auth.signOut();
                     setUserId(null);
                     setCurrentUser(null);
                     setMoney(0);
                     setInventory([]);
-                    setUsername('');
+                    setEmail('');
                     setPassword('');
                     setConfirmPassword('');
                     setLoginMode('login');
@@ -331,30 +367,21 @@
                 
                 if (userAnswer === currentFish.math.correctAnswer) {
                     try {
-                        await fetch(`${API_URL}/add-fish`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId, fish: currentFish })
+                        // Thêm cá vào inventory
+                        await db.collection('users').doc(userId).collection('inventory').add({
+                            name: currentFish.name,
+                            rarity: currentFish.rarity,
+                            weight: currentFish.weight,
+                            price: currentFish.price,
+                            color: currentFish.color,
+                            favourite: false,
+                            caughtAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
 
                         setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
                         
-                        const response = await fetch(`${API_URL}/login`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ username: currentUser, password })
-                        });
-                        const data = await response.json();
-                        const formattedInventory = data.inventory.map(fish => ({
-                            id: fish.id,
-                            name: fish.fish_name,
-                            rarity: fish.rarity,
-                            weight: parseFloat(fish.weight),
-                            price: fish.price,
-                            color: fish.colour,
-                            favourite: Boolean(fish.favourite)
-                        }));
-                        setInventory(formattedInventory);
+                        // Reload inventory
+                        await loadGameData(userId);
                         
                         setGameState('result');
                         setTimeout(() => {
@@ -374,19 +401,15 @@
                 }
             };
 
-            const toggleFavourite = async (index) => {
-                const fish = inventory[index];
-                const newFavourite = !fish.favourite;
-                
+            const toggleFavourite = async (fishId, currentFavourite) => {
                 try {
-                    await fetch(`${API_URL}/toggle-favourite`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ fishId: fish.id, favourite: newFavourite })
+                    await db.collection('users').doc(userId).collection('inventory').doc(fishId).update({
+                        favourite: !currentFavourite
                     });
 
-                    const newInventory = [...inventory];
-                    newInventory[index].favourite = newFavourite;
+                    const newInventory = inventory.map(fish => 
+                        fish.id === fishId ? { ...fish, favourite: !currentFavourite } : fish
+                    );
                     setInventory(newInventory);
                 } catch (error) {
                     alert('Lỗi khi cập nhật: ' + error.message);
@@ -398,13 +421,19 @@
                 const totalMoney = fishToSell.reduce((sum, fish) => sum + fish.price, 0);
                 
                 try {
-                    await fetch(`${API_URL}/sell-fish`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId })
+                    // Xóa các cá không được đánh dấu favourite
+                    const batch = db.batch();
+                    fishToSell.forEach(fish => {
+                        const fishRef = db.collection('users').doc(userId).collection('inventory').doc(fish.id);
+                        batch.delete(fishRef);
                     });
+                    await batch.commit();
 
-                    setMoney(money + totalMoney);
+                    // Cập nhật tiền
+                    const newMoney = money + totalMoney;
+                    setMoney(newMoney);
+                    await db.collection('users').doc(userId).update({ money: newMoney });
+
                     setInventory(inventory.filter(fish => fish.favourite));
                     setShowSellConfirm(false);
                     
@@ -417,7 +446,7 @@
                 }
             };
 
-            const buyRod = (item) => {
+            const buyRod = async (item) => {
                 if (money < item.price) {
                     alert('Bạn không đủ tiền để mua cần câu này!');
                     return;
@@ -428,14 +457,24 @@
                     return;
                 }
 
-                setMoney(money - item.price);
-                setOwnedRods([...ownedRods, item.unlocks]);
+                const newMoney = money - item.price;
+                const newOwnedRods = [...ownedRods, item.unlocks];
+
+                setMoney(newMoney);
+                setOwnedRods(newOwnedRods);
+                
+                await db.collection('users').doc(userId).update({
+                    money: newMoney,
+                    ownedRods: newOwnedRods
+                });
+
                 setMessage(`✅ Đã mua ${item.name} thành công! Vào Balo để trang bị.`);
                 setTimeout(() => setMessage(''), 3000);
             };
 
-            const equipRod = (rodType) => {
+            const equipRod = async (rodType) => {
                 setFishingRod(rodType);
+                await db.collection('users').doc(userId).update({ fishingRod: rodType });
                 setMessage(`✅ Đã trang bị ${getRodNameByType(rodType)}!`);
                 setTimeout(() => setMessage(''), 2000);
             };
@@ -471,12 +510,46 @@
                 }
             };
 
+            if (configError) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-600 to-red-800">
+                        <div className="bg-white rounded-xl shadow-2xl p-12 max-w-2xl w-full mx-4">
+                            <h1 className="text-4xl font-bold text-center mb-6 text-red-600">⚠️ Cấu hình Firebase</h1>
+                            <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6 mb-6">
+                                <p className="text-lg text-red-800 mb-4">
+                                    Bạn cần cấu hình Firebase trước khi sử dụng game!
+                                </p>
+                                <ol className="text-sm text-red-700 space-y-2 ml-4">
+                                    <li><strong>1.</strong> Truy cập <a href="https://console.firebase.google.com" target="_blank" className="text-blue-600 underline">Firebase Console</a></li>
+                                    <li><strong>2.</strong> Tạo project mới hoặc chọn project có sẵn</li>
+                                    <li><strong>3.</strong> Vào <strong>Project Settings</strong> → <strong>Your apps</strong> → Chọn Web app</li>
+                                    <li><strong>4.</strong> Copy Firebase config và thay thế vào code</li>
+                                    <li><strong>5.</strong> Bật <strong>Authentication</strong> (Email/Password)</li>
+                                    <li><strong>6.</strong> Bật <strong>Firestore Database</strong></li>
+                                </ol>
+                            </div>
+                            <div className="bg-gray-100 rounded-lg p-4 mb-6">
+                                <p className="text-sm font-mono text-gray-800">
+                                    Tìm và thay đổi trong code:<br/>
+                                    <code className="text-red-600">apiKey: "YOUR_API_KEY"</code>
+                                </p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-sm text-gray-600">
+                                    Sau khi cấu hình xong, tải lại trang này.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             if (gameState === 'login') {
                 return (
                     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800">
                         <div className="bg-white rounded-xl shadow-2xl p-12 max-w-md w-full mx-4">
                             <h1 className="text-4xl font-bold text-center mb-8 text-gray-800">🎣 Game Câu Cá 2D</h1>
-                            <p className="text-center text-sm text-green-600 font-semibold mb-4">✅ Kết nối MySQL Database</p>
+                            <p className="text-center text-sm text-green-600 font-semibold mb-4">✅ Sử dụng Firebase</p>
                             
                             {loading ? (
                                 <div className="text-center text-gray-600 text-lg py-8">Đang xử lý...</div>
@@ -506,11 +579,10 @@
                                     </div>
 
                                     <input
-                                        type="text"
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        placeholder="Tên tài khoản"
-                                        maxLength={20}
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder="Email"
                                         className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-purple-600"
                                     />
                                     
@@ -519,7 +591,6 @@
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         placeholder="Mật khẩu"
-                                        maxLength={50}
                                         className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-purple-600"
                                     />
 
@@ -529,7 +600,6 @@
                                             value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             placeholder="Xác nhận mật khẩu"
-                                            maxLength={50}
                                             className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-purple-600"
                                         />
                                     )}
@@ -540,18 +610,6 @@
                                     >
                                         {loginMode === 'login' ? '🎮 Đăng nhập' : '📝 Đăng ký'}
                                     </button>
-
-                                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                                        <p className="text-sm text-blue-800 font-semibold mb-2">
-                                            💡 Hướng dẫn cài đặt:
-                                        </p>
-                                        <ol className="text-xs text-blue-700 space-y-1 ml-4">
-                                            <li>1. Cài Node.js và MySQL</li>
-                                            <li>2. Chạy: npm install express mysql2 bcrypt cors</li>
-                                            <li>3. Khởi động server: node server.js</li>
-                                            <li>4. Mở file HTML này trên trình duyệt</li>
-                                        </ol>
-                                    </div>
                                 </>
                             )}
                         </div>
@@ -610,14 +668,14 @@
                                             <p className="text-center text-gray-500 text-xl py-12">Chưa có cá nào trong balo!</p>
                                         ) : (
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                {inventory.map((fish, index) => (
+                                                {inventory.map((fish) => (
                                                     <div
                                                         key={fish.id}
                                                         className="border-4 rounded-lg p-4 relative"
                                                         style={{ borderColor: fish.color }}
                                                     >
                                                         <button
-                                                            onClick={() => toggleFavourite(index)}
+                                                            onClick={() => toggleFavourite(fish.id, fish.favourite)}
                                                             className="absolute top-2 right-2 text-3xl hover:scale-110 transition"
                                                         >
                                                             {fish.favourite ? '⭐' : '☆'}
@@ -693,7 +751,7 @@
                         <div className="max-w-4xl mx-auto">
                             <div className="bg-white rounded-lg shadow-2xl p-6">
                                 <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-3xl font-bold text-gray-800">🏪 Cửa Hàng Cần Câu</h2>
+                                    <h2 className="text-3xl font-bold text-gray-800">🪝 Cửa Hàng Cần Câu</h2>
                                     <button
                                         onClick={() => setShowShop(false)}
                                         className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition"
@@ -832,7 +890,7 @@
                                         onClick={() => setShowShop(true)}
                                         className="px-8 py-3 bg-purple-600 text-white text-xl rounded-lg hover:bg-purple-700 transform hover:scale-105 transition shadow-lg"
                                     >
-                                        🏪 Cửa hàng
+                                        🪝 Cửa hàng
                                     </button>
                                     
                                     <button
