@@ -667,8 +667,27 @@
                                     <li><strong>3.</strong> Vào <strong>Project Settings</strong> → <strong>Your apps</strong> → Chọn Web app</li>
                                     <li><strong>4.</strong> Copy Firebase config và thay thế vào code</li>
                                     <li><strong>5.</strong> Bật <strong>Authentication</strong> (Email/Password)</li>
-                                    <li><strong>6.</strong> Bật <strong>Firestore Database</strong></li>
+                                    <li><strong>6.</strong> Bật <strong>Firestore Database</strong> và cấu hình Rules</li>
                                 </ol>
+                            </div>
+                            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-4">
+                                <p className="text-sm font-bold text-yellow-800 mb-2">📋 Firestore Rules cần thiết:</p>
+                                <pre className="text-xs bg-white p-3 rounded overflow-x-auto">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      match /inventory/{fishId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    match /leaderboard/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}`}</pre>
                             </div>
                         </div>
                     </div>
@@ -1312,6 +1331,98 @@
                 );
             }
 
+            if (showLeaderboard) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-yellow-400 to-orange-500 p-8">
+                        <div className="max-w-4xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-gray-800">🏆 Bảng Xếp Hạng</h2>
+                                    <button
+                                        onClick={() => setShowLeaderboard(false)}
+                                        className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setLeaderboardTab('fish')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            leaderboardTab === 'fish' 
+                                                ? 'bg-orange-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🐟 Số Cá
+                                    </button>
+                                    <button
+                                        onClick={() => setLeaderboardTab('money')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            leaderboardTab === 'money' 
+                                                ? 'bg-orange-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        💰 Tiền
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {leaderboardData.length === 0 ? (
+                                        <p className="text-center text-gray-500 text-xl py-12">Chưa có dữ liệu xếp hạng!</p>
+                                    ) : (
+                                        leaderboardData.map((player) => {
+                                            const isCurrentUser = player.id === userId;
+                                            const rankColor = player.rank === 1 ? 'bg-yellow-400' : 
+                                                            player.rank === 2 ? 'bg-gray-300' : 
+                                                            player.rank === 3 ? 'bg-orange-400' : 
+                                                            'bg-blue-100';
+                                            
+                                            return (
+                                                <div
+                                                    key={player.id}
+                                                    className={`flex items-center gap-4 p-4 rounded-lg ${
+                                                        isCurrentUser ? 'bg-green-100 border-2 border-green-500' : 'bg-gray-50'
+                                                    }`}
+                                                >
+                                                    <div className={`${rankColor} w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl`}>
+                                                        {player.rank === 1 ? '🥇' : 
+                                                         player.rank === 2 ? '🥈' : 
+                                                         player.rank === 3 ? '🥉' : 
+                                                         `#${player.rank}`}
+                                                    </div>
+                                                    
+                                                    <div className="flex-1">
+                                                        <p className="font-bold text-lg text-gray-800">
+                                                            {player.email}
+                                                            {isCurrentUser && <span className="ml-2 text-green-600">(Bạn)</span>}
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    <div className="text-right">
+                                                        {leaderboardTab === 'fish' ? (
+                                                            <p className="text-2xl font-bold text-blue-600">
+                                                                🐟 {player.totalFish} con
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-2xl font-bold text-yellow-600">
+                                                                💰 {player.money} xu
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className={`min-h-screen flex items-center justify-center transition-all duration-500 ${
                     gameState === 'fishing' || gameState === 'question' 
@@ -1492,4 +1603,3 @@
     </script>
 </body>
 </html>
-
