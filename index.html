@@ -22,13 +22,12 @@
 
         // ⚠️ THAY ĐỔI CONFIG NÀY BẰNG FIREBASE CONFIG CỦA BẠN
         const firebaseConfig = {
-          apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
-          authDomain: "fishing-game-b3de4.firebaseapp.com",
-          projectId: "fishing-game-b3de4",
-          storageBucket: "fishing-game-b3de4.firebasestorage.app",
-          messagingSenderId: "995387752934",
-          appId: "1:995387752934:web:ccb5c73999a23d7715d627",
-          measurementId: "G-2BYJH3JMTZ"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         // Khởi tạo Firebase
@@ -72,8 +71,11 @@
             const [showSellConfirm, setShowSellConfirm] = useState(false);
             const [loading, setLoading] = useState(false);
             const [showShop, setShowShop] = useState(false);
+            const [shopTab, setShopTab] = useState('rods');
             const [fishingRod, setFishingRod] = useState('normal');
             const [ownedRods, setOwnedRods] = useState(['normal']);
+            const [currentBait, setCurrentBait] = useState('normal');
+            const [ownedBaits, setOwnedBaits] = useState(['normal']);
             const [configError, setConfigError] = useState(false);
 
             const rarities = [
@@ -92,6 +94,52 @@
                 'Legendary': ['Cá Mập Trắng', 'Cá Voi Xanh', 'Cá Sấu', 'Cá Rồng'],
                 'Mythic': ['Cá Rồng Vàng', 'Cá Phượng Hoàng', 'Cá Kỳ Lân', 'Leviathan'],
                 'Secret': ['Cá Thần', 'Poseidon', 'Kraken', 'Cá Rồng Cổ Đại']
+            };
+
+            const baitInfo = {
+                'normal': {
+                    name: 'Normal Bait',
+                    description: 'Mồi câu thông thường',
+                    icon: '🪱',
+                    color: '#9CA3AF',
+                    difficulty: {
+                        'Common': 0, 'Uncommon': 0, 'Rare': 0,
+                        'Legendary': 0, 'Mythic': 0, 'Secret': 0
+                    }
+                },
+                'fish': {
+                    name: 'Fish Bait',
+                    description: 'Giảm độ khó bài toán',
+                    icon: '🐟',
+                    color: '#22C55E',
+                    price: 100,
+                    difficulty: {
+                        'Common': 20, 'Uncommon': 15, 'Rare': 10,
+                        'Legendary': 5, 'Mythic': 2, 'Secret': 1
+                    }
+                },
+                'update': {
+                    name: 'Update Bait',
+                    description: 'Giảm đáng kể độ khó',
+                    icon: '🦐',
+                    color: '#3B82F6',
+                    price: 300,
+                    difficulty: {
+                        'Common': 40, 'Uncommon': 35, 'Rare': 30,
+                        'Legendary': 25, 'Mythic': 20, 'Secret': 10
+                    }
+                },
+                'secret': {
+                    name: 'Secret Bait',
+                    description: 'Giảm cực kỳ nhiều độ khó',
+                    icon: '🦑',
+                    color: '#A855F7',
+                    price: 500,
+                    difficulty: {
+                        'Common': 80, 'Uncommon': 75, 'Rare': 70,
+                        'Legendary': 65, 'Mythic': 60, 'Secret': 55
+                    }
+                }
             };
 
             const shopItems = [
@@ -149,20 +197,20 @@
                     }, 2000);
                     return () => clearTimeout(saveTimer);
                 }
-            }, [money, fishingRod, ownedRods, userId]);
+            }, [money, fishingRod, ownedRods, currentBait, ownedBaits, userId]);
 
             const loadGameData = async (uid) => {
                 try {
-                    // Load game data
                     const gameDoc = await db.collection('users').doc(uid).get();
                     if (gameDoc.exists) {
                         const data = gameDoc.data();
                         setMoney(data.money || 0);
                         setFishingRod(data.fishingRod || 'normal');
                         setOwnedRods(data.ownedRods || ['normal']);
+                        setCurrentBait(data.currentBait || 'normal');
+                        setOwnedBaits(data.ownedBaits || ['normal']);
                     }
 
-                    // Load inventory
                     const inventorySnapshot = await db.collection('users').doc(uid).collection('inventory').get();
                     const fishList = inventorySnapshot.docs.map(doc => ({
                         id: doc.id,
@@ -181,6 +229,8 @@
                         money,
                         fishingRod,
                         ownedRods,
+                        currentBait,
+                        ownedBaits,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
                 } catch (error) {
@@ -207,12 +257,13 @@
                     const userCredential = await auth.createUserWithEmailAndPassword(email, password);
                     const user = userCredential.user;
                     
-                    // Khởi tạo dữ liệu game mới
                     await db.collection('users').doc(user.uid).set({
                         email: user.email,
                         money: 0,
                         fishingRod: 'normal',
                         ownedRods: ['normal'],
+                        currentBait: 'normal',
+                        ownedBaits: ['normal'],
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
@@ -305,11 +356,14 @@
                 return Math.round(weight * 10) / 10;
             };
 
-            const generateMath = (range) => {
+            const generateMath = (range, rarity) => {
+                const difficultyReduction = baitInfo[currentBait].difficulty[rarity] || 0;
+                const adjustedRange = Math.max(5, Math.round(range * (1 - difficultyReduction / 100)));
+                
                 const operations = ['+', '-'];
                 const op = operations[Math.floor(Math.random() * operations.length)];
-                const num1 = Math.floor(Math.random() * range) + 1;
-                const num2 = Math.floor(Math.random() * range) + 1;
+                const num1 = Math.floor(Math.random() * adjustedRange) + 1;
+                const num2 = Math.floor(Math.random() * adjustedRange) + 1;
                 
                 const question = `${num1} ${op} ${num2}`;
                 const correctAnswer = op === '+' ? num1 + num2 : num1 - num2;
@@ -325,7 +379,7 @@
                     const rarity = getRandomRarity();
                     const fishName = fishNames[rarity.name][Math.floor(Math.random() * fishNames[rarity.name].length)];
                     const weight = calculateWeight();
-                    const math = generateMath(rarity.range);
+                    const math = generateMath(rarity.range, rarity.name);
                     const fishPrice = Math.round(rarity.price * weight);
                     
                     setCurrentFish({
@@ -367,7 +421,6 @@
                 
                 if (userAnswer === currentFish.math.correctAnswer) {
                     try {
-                        // Thêm cá vào inventory
                         await db.collection('users').doc(userId).collection('inventory').add({
                             name: currentFish.name,
                             rarity: currentFish.rarity,
@@ -380,7 +433,6 @@
 
                         setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
                         
-                        // Reload inventory
                         await loadGameData(userId);
                         
                         setGameState('result');
@@ -421,7 +473,6 @@
                 const totalMoney = fishToSell.reduce((sum, fish) => sum + fish.price, 0);
                 
                 try {
-                    // Xóa các cá không được đánh dấu favourite
                     const batch = db.batch();
                     fishToSell.forEach(fish => {
                         const fishRef = db.collection('users').doc(userId).collection('inventory').doc(fish.id);
@@ -429,7 +480,6 @@
                     });
                     await batch.commit();
 
-                    // Cập nhật tiền
                     const newMoney = money + totalMoney;
                     setMoney(newMoney);
                     await db.collection('users').doc(userId).update({ money: newMoney });
@@ -472,10 +522,45 @@
                 setTimeout(() => setMessage(''), 3000);
             };
 
+            const buyBait = async (baitType) => {
+                const bait = baitInfo[baitType];
+                
+                if (money < bait.price) {
+                    alert('Bạn không đủ tiền để mua mồi này!');
+                    return;
+                }
+
+                if (ownedBaits.includes(baitType)) {
+                    alert('Bạn đã có mồi này rồi!');
+                    return;
+                }
+
+                const newMoney = money - bait.price;
+                const newOwnedBaits = [...ownedBaits, baitType];
+
+                setMoney(newMoney);
+                setOwnedBaits(newOwnedBaits);
+                
+                await db.collection('users').doc(userId).update({
+                    money: newMoney,
+                    ownedBaits: newOwnedBaits
+                });
+
+                setMessage(`✅ Đã mua ${bait.name} thành công! Vào Balo để trang bị.`);
+                setTimeout(() => setMessage(''), 3000);
+            };
+
             const equipRod = async (rodType) => {
                 setFishingRod(rodType);
                 await db.collection('users').doc(userId).update({ fishingRod: rodType });
                 setMessage(`✅ Đã trang bị ${getRodNameByType(rodType)}!`);
+                setTimeout(() => setMessage(''), 2000);
+            };
+
+            const equipBait = async (baitType) => {
+                setCurrentBait(baitType);
+                await db.collection('users').doc(userId).update({ currentBait: baitType });
+                setMessage(`✅ Đã trang bị ${baitInfo[baitType].name}!`);
                 setTimeout(() => setMessage(''), 2000);
             };
 
@@ -527,17 +612,6 @@
                                     <li><strong>5.</strong> Bật <strong>Authentication</strong> (Email/Password)</li>
                                     <li><strong>6.</strong> Bật <strong>Firestore Database</strong></li>
                                 </ol>
-                            </div>
-                            <div className="bg-gray-100 rounded-lg p-4 mb-6">
-                                <p className="text-sm font-mono text-gray-800">
-                                    Tìm và thay đổi trong code:<br/>
-                                    <code className="text-red-600">apiKey: "YOUR_API_KEY"</code>
-                                </p>
-                            </div>
-                            <div className="text-center">
-                                <p className="text-sm text-gray-600">
-                                    Sau khi cấu hình xong, tải lại trang này.
-                                </p>
                             </div>
                         </div>
                     </div>
@@ -660,6 +734,16 @@
                                     >
                                         🎣 Cần câu ({ownedRods.length})
                                     </button>
+                                    <button
+                                        onClick={() => setInventoryTab('baits')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            inventoryTab === 'baits' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🪱 Mồi câu ({ownedBaits.length})
+                                    </button>
                                 </div>
                                 
                                 {inventoryTab === 'fish' ? (
@@ -697,7 +781,7 @@
                                             </div>
                                         )}
                                     </div>
-                                ) : (
+                                ) : inventoryTab === 'rods' ? (
                                     <div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                             {ownedRods.map((rodType, index) => (
@@ -734,6 +818,46 @@
                                             ))}
                                         </div>
                                     </div>
+                                ) : (
+                                    <div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            {ownedBaits.map((baitType, index) => {
+                                                const bait = baitInfo[baitType];
+                                                return (
+                                                    <div
+                                                        key={index}
+                                                        className="border-4 rounded-lg p-6 relative"
+                                                        style={{ borderColor: bait.color }}
+                                                    >
+                                                        {currentBait === baitType && (
+                                                            <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                                ✓ Đang dùng
+                                                            </div>
+                                                        )}
+                                                        
+                                                        <div className="text-center mb-4">
+                                                            <div className="text-5xl mb-2">{bait.icon}</div>
+                                                            <h3 className="text-xl font-bold mb-2" style={{ color: bait.color }}>
+                                                                {bait.name}
+                                                            </h3>
+                                                            <p className="text-gray-600 text-sm mb-4">
+                                                                {bait.description}
+                                                            </p>
+                                                        </div>
+                                                        
+                                                        {currentBait !== baitType && (
+                                                            <button
+                                                                onClick={() => equipBait(baitType)}
+                                                                className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                            >
+                                                                Trang bị
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -748,10 +872,10 @@
                             <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
                         </div>
                         
-                        <div className="max-w-4xl mx-auto">
+                        <div className="max-w-6xl mx-auto">
                             <div className="bg-white rounded-lg shadow-2xl p-6">
                                 <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-3xl font-bold text-gray-800">🪝 Cửa Hàng Cần Câu</h2>
+                                    <h2 className="text-3xl font-bold text-gray-800">🪝 Cửa Hàng</h2>
                                     <button
                                         onClick={() => setShowShop(false)}
                                         className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition"
@@ -760,51 +884,131 @@
                                     </button>
                                 </div>
 
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setShopTab('rods')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            shopTab === 'rods' 
+                                                ? 'bg-purple-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🎣 Cần Câu
+                                    </button>
+                                    <button
+                                        onClick={() => setShopTab('baits')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            shopTab === 'baits' 
+                                                ? 'bg-purple-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🪱 Mồi Câu
+                                    </button>
+                                </div>
+
                                 <div className="mb-6 p-4 bg-blue-50 rounded-lg">
                                     <p className="text-lg font-semibold text-blue-900">
-                                        🎣 Cần câu hiện tại: <span className="text-blue-600">{getRodName()}</span>
+                                        🎣 Cần câu: <span className="text-blue-600">{getRodName()}</span>
+                                        <span className="mx-2">|</span>
+                                        🪱 Mồi: <span className="text-green-600">{baitInfo[currentBait].name}</span>
                                     </p>
                                 </div>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {shopItems.map((item) => {
-                                        const isOwned = ownedRods.includes(item.unlocks);
-                                        
-                                        return (
-                                            <div
-                                                key={item.id}
-                                                className="border-4 border-gray-300 rounded-lg p-6 relative bg-gradient-to-b from-white to-gray-50"
-                                            >
-                                                {isOwned && (
-                                                    <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                                                        ✓ Đã mua
-                                                    </div>
-                                                )}
-                                                
-                                                <div className="text-center mb-4">
-                                                    <div className="text-5xl mb-3">🎣</div>
-                                                </div>
-                                                
-                                                <h3 className="text-2xl font-bold mb-2 text-gray-800">
-                                                    {item.name}
-                                                </h3>
-                                                <p className="text-gray-600 mb-4 min-h-12">
-                                                    {item.description}
-                                                </p>
-                                                <p className="text-3xl font-bold text-yellow-600 mb-4">
-                                                    💰 {item.price} xu
-                                                </p>
-                                                <button
-                                                    onClick={() => buyRod(item)}
-                                                    disabled={isOwned || money < item.price}
-                                                    className={`w-full py-3 text-white text-lg font-bold rounded-lg transition ${item.color} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                                {shopTab === 'rods' ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {shopItems.map((item) => {
+                                            const isOwned = ownedRods.includes(item.unlocks);
+                                            
+                                            return (
+                                                <div
+                                                    key={item.id}
+                                                    className="border-4 border-gray-300 rounded-lg p-6 relative bg-gradient-to-b from-white to-gray-50"
                                                 >
-                                                    {isOwned ? 'Đã sở hữu' : money < item.price ? 'Không đủ tiền' : 'Mua ngay'}
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                                    {isOwned && (
+                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            ✓ Đã mua
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-5xl mb-3">🎣</div>
+                                                    </div>
+                                                    
+                                                    <h3 className="text-2xl font-bold mb-2 text-gray-800">
+                                                        {item.name}
+                                                    </h3>
+                                                    <p className="text-gray-600 mb-4 min-h-12">
+                                                        {item.description}
+                                                    </p>
+                                                    <p className="text-3xl font-bold text-yellow-600 mb-4">
+                                                        💰 {item.price} xu
+                                                    </p>
+                                                    <button
+                                                        onClick={() => buyRod(item)}
+                                                        disabled={isOwned || money < item.price}
+                                                        className={`w-full py-3 text-white text-lg font-bold rounded-lg transition ${item.color} disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                                                    >
+                                                        {isOwned ? 'Đã sở hữu' : money < item.price ? 'Không đủ tiền' : 'Mua ngay'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {Object.entries(baitInfo).filter(([key]) => key !== 'normal').map(([baitType, bait]) => {
+                                            const isOwned = ownedBaits.includes(baitType);
+                                            
+                                            return (
+                                                <div
+                                                    key={baitType}
+                                                    className="border-4 rounded-lg p-6 relative bg-gradient-to-b from-white to-gray-50"
+                                                    style={{ borderColor: bait.color }}
+                                                >
+                                                    {isOwned && (
+                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            ✓ Đã mua
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-6xl mb-3">{bait.icon}</div>
+                                                        <h3 className="text-2xl font-bold mb-2" style={{ color: bait.color }}>
+                                                            {bait.name}
+                                                        </h3>
+                                                        <p className="text-gray-600 mb-4 min-h-12">
+                                                            {bait.description}
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    <div className="mb-4 text-sm text-gray-700">
+                                                        <p className="font-bold mb-2">Giảm độ khó:</p>
+                                                        <div className="space-y-1">
+                                                            <p>Common: {bait.difficulty.Common}%</p>
+                                                            <p>Uncommon: {bait.difficulty.Uncommon}%</p>
+                                                            <p>Rare: {bait.difficulty.Rare}%</p>
+                                                            <p>Legendary: {bait.difficulty.Legendary}%</p>
+                                                            <p>Mythic: {bait.difficulty.Mythic}%</p>
+                                                            <p>Secret: {bait.difficulty.Secret}%</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <p className="text-3xl font-bold text-yellow-600 mb-4">
+                                                        💰 {bait.price} xu
+                                                    </p>
+                                                    <button
+                                                        onClick={() => buyBait(baitType)}
+                                                        disabled={isOwned || money < bait.price}
+                                                        className="w-full py-3 text-white text-lg font-bold rounded-lg transition bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                                                    >
+                                                        {isOwned ? 'Đã sở hữu' : money < bait.price ? 'Không đủ tiền' : 'Mua ngay'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -902,9 +1106,12 @@
                                     </button>
                                 </div>
 
-                                <div className="mt-6 p-4 bg-white bg-opacity-50 rounded-lg">
+                                <div className="mt-6 p-4 bg-white bg-opacity-50 rounded-lg space-y-2">
                                     <p className="text-lg font-semibold text-gray-800">
                                         🎣 Cần câu: <span className="text-blue-600">{getRodName()}</span>
+                                    </p>
+                                    <p className="text-lg font-semibold text-gray-800">
+                                        {baitInfo[currentBait].icon} Mồi: <span className="text-green-600">{baitInfo[currentBait].name}</span>
                                     </p>
                                 </div>
                             </div>
@@ -932,6 +1139,9 @@
                                 </div>
 
                                 <div className="my-4 p-4 bg-gray-100 rounded-lg">
+                                    <p className="text-sm text-purple-600 font-semibold mb-2">
+                                        {baitInfo[currentBait].icon} Sử dụng: {baitInfo[currentBait].name}
+                                    </p>
                                     <p className="text-3xl font-bold text-gray-800 mb-4">
                                         {currentFish.math.question} = ?
                                     </p>
