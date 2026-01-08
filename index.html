@@ -78,6 +78,10 @@
             const [currentBait, setCurrentBait] = useState('normal');
             const [ownedBaits, setOwnedBaits] = useState(['normal']);
             const [configError, setConfigError] = useState(false);
+            const [showLeaderboard, setShowLeaderboard] = useState(false);
+            const [leaderboardTab, setLeaderboardTab] = useState('fish');
+            const [leaderboardData, setLeaderboardData] = useState([]);
+            const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -238,6 +242,40 @@
                     console.error('Lỗi khi lưu:', error);
                 }
             };
+
+            const loadLeaderboard = async () => {
+               setLoadingLeaderboard(true);
+               try {
+                   // Lấy dữ liệu tất cả người chơi
+                   const usersSnapshot = await db.collection('users').get();
+                   const leaderboard = [];
+
+                   for (const userDoc of usersSnapshot.docs) {
+                       const userData = userDoc.data();
+            
+                       // Đếm số cá của người chơi
+                       const inventorySnapshot = await db.collection('users')
+                           .doc(userDoc.id)
+                           .collection('inventory')
+                           .get();
+            
+                       const fishCount = inventorySnapshot.size;
+            
+                       leaderboard.push({
+                           id: userDoc.id,
+                           email: userData.email || 'Anonymous',
+                           money: userData.money || 0,
+                           fishCount: fishCount
+                       });
+                   }
+
+                   setLeaderboardData(leaderboard);
+               } catch (error) {
+                   console.error('Lỗi khi tải bảng xếp hạng:', error);
+               } finally {
+                   setLoadingLeaderboard(false);
+               }
+           };
 
             const handleRegister = async () => {
                 if (!email.trim() || !email.includes('@')) {
@@ -1016,6 +1054,120 @@
                 );
             }
 
+            if (showLeaderboard) {
+                const sortedData = leaderboardTab === 'fish' 
+                    ? [...leaderboardData].sort((a, b) => b.fishCount - a.fishCount)
+                    : [...leaderboardData].sort((a, b) => b.money - a.money);
+
+                return (
+                    <div className="min-h-screen bg-gradient-to-b from-yellow-400 to-orange-600 p-8">
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                        </div>
+            
+                        <div className="max-w-4xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-gray-800">🏆 Bảng Xếp Hạng</h2>
+                                    <button
+                                        onClick={() => setShowLeaderboard(false)}
+                                        className="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setLeaderboardTab('fish')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            leaderboardTab === 'fish' 
+                                                ? 'bg-blue-600 text-white' 
+                                    :             'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🐟 Số Cá Câu Được
+                                    </button>
+                                    <button
+                                        onClick={() => setLeaderboardTab('money')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            leaderboardTab === 'money' 
+                                                ? 'bg-yellow-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        💰 Số Tiền
+                                    </button>
+                                </div>
+
+                                <button
+                                    onClick={loadLeaderboard}
+                                    disabled={loadingLeaderboard}
+                                    className="w-full mb-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:bg-gray-400"
+                                >
+                                    {loadingLeaderboard ? '⏳ Đang tải...' : '🔄 Làm mới'}
+                                </button>
+
+                                {loadingLeaderboard ? (
+                                    <div className="text-center text-gray-500 text-xl py-12">
+                                        Đang tải bảng xếp hạng...
+                                    </div>
+                                ) : sortedData.length === 0 ? (
+                                    <div className="text-center text-gray-500 text-xl py-12">
+                                        Chưa có dữ liệu
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {sortedData.map((player, index) => {
+                                            const isCurrentUser = player.id === userId;
+                                            const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
+                                
+                                            return (
+                                                <div
+                                                    key={player.id}
+                                                    className={`flex items-center justify-between p-4 rounded-lg border-2 ${
+                                                        isCurrentUser 
+                                                            ? 'bg-blue-50 border-blue-500' 
+                                                            : 'bg-gray-50 border-gray-200'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <span className="text-3xl font-bold w-12 text-center">
+                                                            {medal}
+                                                        </span>
+                                                        <div>
+                                                            <p className="font-bold text-lg text-gray-800">
+                                                                {player.email}
+                                                                {isCurrentUser && (
+                                                                    <span className="ml-2 text-sm bg-blue-500 text-white px-2 py-1 rounded">
+                                                                        Bạn
+                                                                    </span>
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        {leaderboardTab === 'fish' ? (
+                                                            <p className="text-2xl font-bold text-blue-600">
+                                                                🐟 {player.fishCount}
+                                                            </p>
+                                                        ) : (
+                                                            <p className="text-2xl font-bold text-yellow-600">
+                                                                💰 {player.money} xu
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className={`min-h-screen flex items-center justify-center transition-all duration-500 ${
                     gameState === 'fishing' || gameState === 'question' 
@@ -1089,6 +1241,16 @@
                                     >
                                         <PackageIcon size={24} />
                                         Balo ({inventory.length})
+                                    </button>
+
+                                    <button
+                                        onClick={() => {
+                                            setShowLeaderboard(true);
+                                            loadLeaderboard();
+                                        }}
+                                        className="px-8 py-3 bg-yellow-600 text-white text-xl rounded-lg hover:bg-yellow-700 transform hover:scale-105 transition shadow-lg"
+                                    >
+                                        🏆 Bảng xếp hạng
                                     </button>
                                     
                                     <button
@@ -1187,3 +1349,4 @@
     </script>
 </body>
 </html>
+
