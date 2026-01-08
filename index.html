@@ -1618,56 +1618,74 @@
                         )}
 
                         {gameState === 'question' && currentFish && (
-                            <div className="bg-white rounded-lg p-8 shadow-2xl max-w-md">
-                                const imagequestion = "/infishingtime.jpg"
+                          <div className="bg-white rounded-lg p-8 shadow-2xl max-w-md">
+    
+                            {/* KHỐI THÔNG TIN CÁ – NỀN ẢNH */}
+                            <div
+                              className="mb-4 p-4 rounded-lg"
+                              style={{
+                                backgroundImage: `
+                                  linear-gradient(${currentFish.color}40, ${currentFish.color}40),
+                                  url("infishingtime.jpg")
+                                `,
+                                backgroundSize: "cover",
+                                backgroundPosition: "center"
+                              }}
+                            >
+                              <div className="flex justify-center mb-2">
+                                <FishIcon size={48} color={currentFish.color} />
+                              </div>
 
-                                return (
-                                  <div
-                                    className="mb-4 p-4 rounded-lg"
-                                    style={{
-                                      backgroundImage: `url(${imagequestion})`
-                                    }}
-                                  >
-                                    <div className="flex justify-center mb-2">
-                                        <FishIcon size={48} color={currentFish.color} />
-                                    </div>
-                                    <h2 className="text-2xl font-bold mb-2" style={{ color: currentFish.color }}>
-                                        {currentFish.name}
-                                    </h2>
-                                    <p className="text-lg"><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
-                                    <p className="text-lg"><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
-                                  </div>
-                                );
+                              <h2
+                                className="text-2xl font-bold mb-2"
+                                style={{ color: currentFish.color }}
+                              >
+                                {currentFish.name}
+                              </h2>
 
-                                <div className="my-4 p-4 bg-gray-100 rounded-lg">
-                                    <p className="text-sm text-purple-600 font-semibold mb-2">
-                                        {baitInfo[currentBait].icon} Sử dụng: {baitInfo[currentBait].name}
-                                    </p>
-                                    <p className="text-3xl font-bold text-gray-800 mb-4">
-                                        {currentFish.math.question} = ?
-                                    </p>
-                                    <p className="text-xl text-red-500 font-bold">
-                                        Thời gian: {timeLeft}s
-                                    </p>
-                                </div>
+                              <p className="text-lg">
+                                <strong>Độ hiếm:</strong> {currentFish.rarity}
+                              </p>
 
-                                <input
-                                    type="number"
-                                    value={answer}
-                                    onChange={(e) => setAnswer(e.target.value)}
-                                    onKeyPress={(e) => e.key === 'Enter' && checkAnswer()}
-                                    placeholder="Nhập câu trả lời"
-                                    className="w-full px-4 py-3 text-xl border-2 border-gray-300 rounded-lg mb-4 text-center"
-                                    autoFocus
-                                />
-
-                                <button
-                                    onClick={checkAnswer}
-                                    className="w-full px-6 py-3 bg-green-600 text-white text-xl rounded-lg hover:bg-green-700 transition"
-                                >
-                                    Trả lời
-                                </button>
+                              <p className="text-lg">
+                                <strong>Cân nặng:</strong> {currentFish.weight} kg
+                              </p>
                             </div>
+
+                            {/* CÂU HỎI */}
+                            <div className="my-4 p-4 bg-gray-100 rounded-lg">
+                              <p className="text-sm text-purple-600 font-semibold mb-2">
+                                {baitInfo[currentBait].icon} Sử dụng: {baitInfo[currentBait].name}
+                              </p>
+
+                              <p className="text-3xl font-bold text-gray-800 mb-4">
+                                {currentFish.math.question} = ?
+                              </p>
+                        
+                              <p className="text-xl text-red-500 font-bold">
+                                Thời gian: {timeLeft}s
+                              </p>
+                            </div>
+
+                            {/* INPUT */}
+                            <input
+                              type="number"
+                              value={answer}
+                              onChange={(e) => setAnswer(e.target.value)}
+                              onKeyPress={(e) => e.key === 'Enter' && checkAnswer()}
+                              placeholder="Nhập câu trả lời"
+                              className="w-full px-4 py-3 text-xl border-2 border-gray-300 rounded-lg mb-4 text-center"
+                              autoFocus
+                            />
+
+                            {/* BUTTON */}
+                            <button
+                              onClick={checkAnswer}
+                              className="w-full px-6 py-3 bg-green-600 text-white text-xl rounded-lg hover:bg-green-700 transition"
+                            >
+                              Trả lời
+                            </button>
+                          </div>
                         )}
 
                         {gameState === 'result' && (
@@ -1687,12 +1705,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
