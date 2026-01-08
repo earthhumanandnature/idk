@@ -1619,7 +1619,15 @@
 
                         {gameState === 'question' && currentFish && (
                             <div className="bg-white rounded-lg p-8 shadow-2xl max-w-md">
-                                <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: currentFish.color + '20' }}>
+                                const imagequestion = "infishingtime.png";
+
+                                return (
+                                  <div
+                                    className="mb-4 p-4 rounded-lg"
+                                    style={{
+                                      backgroundImage: `url(${imagequestion})`
+                                    }}
+                                  >
                                     <div className="flex justify-center mb-2">
                                         <FishIcon size={48} color={currentFish.color} />
                                     </div>
@@ -1628,7 +1636,8 @@
                                     </h2>
                                     <p className="text-lg"><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
                                     <p className="text-lg"><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
-                                </div>
+                                  </div>
+                                );
 
                                 <div className="my-4 p-4 bg-gray-100 rounded-lg">
                                     <p className="text-sm text-purple-600 font-semibold mb-2">
@@ -1678,6 +1687,7 @@
     </script>
 </body>
 </html>
+
 
 
 
