@@ -59,9 +59,6 @@
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [confirmPassword, setConfirmPassword] = useState('');
-            const [showQuests, setShowQuests] = useState(false);
-            const [dailyQuests, setDailyQuests] = useState([]);
-            const [questProgress, setQuestProgress] = useState({});
             const [currentUser, setCurrentUser] = useState(null);
             const [userId, setUserId] = useState(null);
             const [currentFish, setCurrentFish] = useState(null);
@@ -93,63 +90,6 @@
                 { name: 'Legendary', weight: 20, range: 40, time: 8, color: '#A855F7', price: 100 },
                 { name: 'Mythic', weight: 10, range: 50, time: 9, color: '#EF4444', price: 200 },
                 { name: 'Secret', weight: 1, range: 60, time: 10, color: '#F59E0B', price: 500 }
-            ];
-
-            const dailyQuestTemplates = [
-                {
-                    id: 'catch_5_fish',
-                    name: 'Người câu cá chuyên nghiệp',
-                    description: 'Câu được 5 con cá',
-                    target: 5,
-                    type: 'fish_count',
-                    reward: 50,
-                    icon: '🎣'
-                },
-                {
-                    id: 'catch_10_fish',
-                    name: 'Thợ câu thượng đẳng',
-                    description: 'Câu được 10 con cá',
-                    target: 10,
-                    type: 'fish_count',
-                    reward: 100,
-                    icon: '🐟'
-                },
-                {
-                    id: 'earn_100_coins',
-                    name: 'Thu hoạch bội thu',
-                    description: 'Kiếm được 100 xu',
-                    target: 100,
-                    type: 'money_earned',
-                    reward: 80,
-                    icon: '💰'
-                },
-                {
-                    id: 'catch_rare',
-                    name: 'Thợ săn cá hiếm',
-                    description: 'Câu được 1 con cá Rare trở lên',
-                    target: 1,
-                    type: 'rare_fish',
-                    reward: 150,
-                    icon: '⭐'
-                },
-                {
-                    id: 'catch_legendary',
-                    name: 'Huyền thoại câu cá',
-                    description: 'Câu được 1 con cá Legendary',
-                    target: 1,
-                    type: 'legendary_fish',
-                    reward: 300,
-                    icon: '🏆'
-                },
-                {
-                    id: 'perfect_streak_3',
-                    name: 'Combo hoàn hảo',
-                    description: 'Câu thành công liên tiếp 3 lần',
-                    target: 3,
-                    type: 'perfect_streak',
-                    reward: 120,
-                    icon: '🔥'
-                }
             ];
 
             const fishNames = {
@@ -337,164 +277,6 @@
                }
            };
 
-            // Khởi tạo nhiệm vụ hằng ngày
-            const initializeDailyQuests = async () => {
-                if (!userId) return;
-    
-                try {
-                    const questDoc = await db.collection('users').doc(userId).collection('quests').doc('daily').get();
-                    const today = new Date().toDateString();
-        
-                    if (!questDoc.exists || questDoc.data().date !== today) {
-                        // Reset nhiệm vụ mới nếu là ngày mới
-                        const newQuests = dailyQuestTemplates.map(quest => ({
-                            ...quest,
-                            progress: 0,
-                            completed: false,
-                            claimed: false
-                        }));
-            
-                        await db.collection('users').doc(userId).collection('quests').doc('daily').set({
-                            date: today,
-                            quests: newQuests,
-                            dailyProgress: {
-                                fishCaught: 0,
-                                moneyEarned: 0,
-                                rareFishCaught: 0,
-                                legendaryFishCaught: 0,
-                                currentStreak: 0
-                            }
-                        });
-            
-                        setDailyQuests(newQuests);
-                        setQuestProgress({
-                            fishCaught: 0,
-                            moneyEarned: 0,
-                            rareFishCaught: 0,
-                            legendaryFishCaught: 0,
-                            currentStreak: 0
-                        });
-                    } else {
-                        // Load nhiệm vụ hiện tại
-                        const data = questDoc.data();
-                        setDailyQuests(data.quests || []);
-                        setQuestProgress(data.dailyProgress || {});
-                    }
-                } catch (error) {
-                    console.error('Lỗi khi khởi tạo nhiệm vụ:', error);
-                }
-            };
-
-            // Cập nhật tiến độ nhiệm vụ
-            const updateQuestProgress = async (type, value = 1) => {
-                if (!userId) return;
-    
-                try {
-                    const questDoc = await db.collection('users').doc(userId).collection('quests').doc('daily').get();
-                    if (!questDoc.exists) return;
-        
-                    const data = questDoc.data();
-                    const updatedProgress = { ...data.dailyProgress };
-                    const updatedQuests = [...data.quests];
-        
-                    // Cập nhật progress dựa vào type
-                    switch(type) {
-                        case 'fish_count':
-                            updatedProgress.fishCaught = (updatedProgress.fishCaught || 0) + 1;
-                            break;
-                        case 'money_earned':
-                            updatedProgress.moneyEarned = (updatedProgress.moneyEarned || 0) + value;
-                            break;
-                        case 'rare_fish':
-                            updatedProgress.rareFishCaught = (updatedProgress.rareFishCaught || 0) + 1;
-                            break;
-                        case 'legendary_fish':
-                            updatedProgress.legendaryFishCaught = (updatedProgress.legendaryFishCaught || 0) + 1;
-                            break;
-                        case 'perfect_streak':
-                            updatedProgress.currentStreak = (updatedProgress.currentStreak || 0) + 1;
-                            break;
-                        case 'reset_streak':
-                            updatedProgress.currentStreak = 0;
-                            break;
-                    }
-        
-                    // Kiểm tra và cập nhật trạng thái nhiệm vụ
-                    updatedQuests.forEach(quest => {
-                        if (quest.completed) return;
-            
-                        let currentProgress = 0;
-                        switch(quest.type) {
-                            case 'fish_count':
-                                currentProgress = updatedProgress.fishCaught;
-                                break;
-                            case 'money_earned':
-                                currentProgress = updatedProgress.moneyEarned;
-                                break;
-                            case 'rare_fish':
-                                currentProgress = updatedProgress.rareFishCaught;
-                                break;
-                            case 'legendary_fish':
-                                currentProgress = updatedProgress.legendaryFishCaught;
-                                break;
-                            case 'perfect_streak':
-                                currentProgress = updatedProgress.currentStreak;
-                                break;
-                        }
-            
-                        quest.progress = Math.min(currentProgress, quest.target);
-                        if (quest.progress >= quest.target) {
-                            quest.completed = true;
-                        }
-                    });
-        
-                    // Lưu vào Firebase
-                    await db.collection('users').doc(userId).collection('quests').doc('daily').update({
-                        quests: updatedQuests,
-                        dailyProgress: updatedProgress
-                    });
-        
-                    setDailyQuests(updatedQuests);
-                    setQuestProgress(updatedProgress);
-                } catch (error) {
-                    console.error('Lỗi khi cập nhật nhiệm vụ:', error);
-                }
-            };
-
-            // Nhận thưởng nhiệm vụ
-            const claimQuestReward = async (questId) => {
-                if (!userId) return;
-    
-                try {
-                    const questDoc = await db.collection('users').doc(userId).collection('quests').doc('daily').get();
-                    if (!questDoc.exists) return;
-        
-                    const data = questDoc.data();
-                    const updatedQuests = data.quests.map(quest => {
-                        if (quest.id === questId && quest.completed && !quest.claimed) {
-                            quest.claimed = true;
-                            const newMoney = money + quest.reward;
-                            setMoney(newMoney);
-                            db.collection('users').doc(userId).update({ money: newMoney });
-                
-                            setMessage(`✅ Hoàn thành nhiệm vụ! Nhận được ${quest.reward} xu!`);
-                            setTimeout(() => setMessage(''), 3000);
-                
-                            return quest;
-                        }
-                        return quest;
-                    });
-        
-                    await db.collection('users').doc(userId).collection('quests').doc('daily').update({
-                        quests: updatedQuests
-                    });
-        
-                    setDailyQuests(updatedQuests);
-                } catch (error) {
-                    console.error('Lỗi khi nhận thưởng:', error);
-                }
-            };
-
             const handleRegister = async () => {
                 if (!email.trim() || !email.includes('@')) {
                     alert('Vui lòng nhập email hợp lệ!');
@@ -656,17 +438,13 @@
             };
 
             useEffect(() => {
-                const unsubscribe = auth.onAuthStateChanged(async (user) => {
-                    if (user) {
-                        setUserId(user.uid);
-                        setCurrentUser(user.email);
-                        await loadGameData(user.uid);
-                        await initializeDailyQuests(); // THÊM DÒNG NÀY
-                        setGameState('menu');
-                    }
-                });
-                return () => unsubscribe();
-            }, []);
+                if (gameState === 'question' && timeLeft > 0) {
+                    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+                    return () => clearTimeout(timer);
+                } else if (gameState === 'question' && timeLeft === 0) {
+                    handleTimeout();
+                }
+            }, [timeLeft, gameState]);
 
             const handleTimeout = () => {
                 setMessage('Hụt mất rồi!');
@@ -679,7 +457,7 @@
 
             const checkAnswer = async () => {
                 const userAnswer = parseInt(answer);
-
+                
                 if (userAnswer === currentFish.math.correctAnswer) {
                     try {
                         await db.collection('users').doc(userId).collection('inventory').add({
@@ -692,24 +470,10 @@
                             caughtAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
 
-                        // CẬP NHẬT NHIỆM VỤ
-                        await updateQuestProgress('fish_count');
-                        await updateQuestProgress('money_earned', currentFish.price);
-        
-                        if (['Rare', 'Legendary', 'Mythic', 'Secret'].includes(currentFish.rarity)) {
-                            await updateQuestProgress('rare_fish');
-                        }
-        
-                        if (currentFish.rarity === 'Legendary') {
-                            await updateQuestProgress('legendary_fish');
-                        }
-        
-                        await updateQuestProgress('perfect_streak');
-
                         setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
-        
+                        
                         await loadGameData(userId);
-        
+                        
                         setGameState('result');
                         setTimeout(() => {
                             setGameState('menu');
@@ -719,9 +483,6 @@
                         alert('Lỗi khi lưu cá: ' + error.message);
                     }
                 } else {
-                    // Reset streak khi câu hụt
-                    await updateQuestProgress('reset_streak'); // THÊM DÒNG NÀY
-    
                     setMessage('Hụt mất rồi!');
                     setGameState('result');
                     setTimeout(() => {
@@ -729,7 +490,8 @@
                         setAnswer('');
                     }, 2000);
                 }
-                
+            };
+
             const toggleFavourite = async (fishId, currentFavourite) => {
                 try {
                     await db.collection('users').doc(userId).collection('inventory').doc(fishId).update({
@@ -1406,124 +1168,6 @@
                 );
             }
 
-            if (showQuests) {
-                const completedCount = dailyQuests.filter(q => q.completed).length;
-                const totalRewards = dailyQuests.filter(q => q.completed && !q.claimed).reduce((sum, q) => sum + q.reward, 0);
-    
-                return (
-                    <div className="min-h-screen bg-gradient-to-b from-pink-400 to-purple-600 p-8">
-                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
-                        </div>
-            
-                        <div className="max-w-4xl mx-auto">
-                            <div className="bg-white rounded-lg shadow-2xl p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-3xl font-bold text-gray-800">📋 Nhiệm vụ Hằng ngày</h2>
-                                    <button
-                                        onClick={() => setShowQuests(false)}
-                                        className="px-6 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition"
-                                    >
-                                        Quay lại
-                                    </button>
-                                </div>
-
-                                <div className="mb-6 p-4 bg-gradient-to-r from-purple-100 to-pink-100 rounded-lg">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="text-lg font-bold text-gray-800">
-                                                🎯 Hoàn thành: {completedCount}/{dailyQuests.length}
-                                            </p>
-                                            <p className="text-sm text-gray-600">Reset vào 00:00 mỗi ngày</p>
-                                        </div>
-                                        {totalRewards > 0 && (
-                                            <div className="bg-yellow-400 px-4 py-2 rounded-lg animate-pulse">
-                                                <p className="text-lg font-bold text-gray-800">
-                                                    💰 +{totalRewards} xu
-                                                </p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    {dailyQuests.map((quest) => {
-                                        const progress = Math.min(quest.progress, quest.target);
-                                        const percentage = (progress / quest.target) * 100;
-                                        const isCompleted = quest.completed;
-                                        const isClaimed = quest.claimed;
-                            
-                                        return (
-                                            <div
-                                                key={quest.id}
-                                                className={`border-2 rounded-lg p-5 transition ${
-                                                    isCompleted 
-                                                        ? isClaimed
-                                                            ? 'border-gray-300 bg-gray-50'
-                                                            : 'border-green-500 bg-green-50'
-                                                        : 'border-blue-300 bg-white'
-                                                }`}
-                                            >
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="text-4xl">{quest.icon}</span>
-                                                        <div>
-                                                            <h3 className="text-xl font-bold text-gray-800">
-                                                                {quest.name}
-                                                            </h3>
-                                                            <p className="text-gray-600">{quest.description}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-2xl font-bold text-yellow-600">
-                                                            +{quest.reward} xu
-                                                        </p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="mb-3">
-                                                    <div className="flex justify-between text-sm mb-1">
-                                                        <span className="font-semibold text-gray-700">
-                                                            Tiến độ: {progress}/{quest.target}
-                                                        </span>
-                                                        <span className="font-semibold text-gray-700">
-                                                            {Math.round(percentage)}%
-                                                        </span>
-                                                    </div>
-                                                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                                                        <div
-                                                            className={`h-full transition-all duration-500 ${
-                                                                isCompleted ? 'bg-green-500' : 'bg-blue-500'
-                                                            }`}
-                                                            style={{ width: `${percentage}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {isCompleted && !isClaimed && (
-                                                    <button
-                                                        onClick={() => claimQuestReward(quest.id)}
-                                                        className="w-full py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition transform hover:scale-105"
-                                                    >
-                                                        ✅ Nhận thưởng
-                                                    </button>
-                                                )}
-                                    
-                                                {isClaimed && (
-                                                    <div className="w-full py-2 bg-gray-400 text-white font-bold rounded-lg text-center">
-                                                        ✓ Đã nhận thưởng
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
-
             return (
                 <div className={`min-h-screen flex items-center justify-center transition-all duration-500 ${
                     gameState === 'fishing' || gameState === 'question' 
@@ -1597,16 +1241,6 @@
                                     >
                                         <PackageIcon size={24} />
                                         Balo ({inventory.length})
-                                    </button>
-
-                                    <button
-                                        onClick={() => {
-                                            setShowQuests(true);
-                                            initializeDailyQuests();
-                                        }}
-                                        className="px-8 py-3 bg-pink-600 text-white text-xl rounded-lg hover:bg-pink-700 transform hover:scale-105 transition shadow-lg"
-                                    >
-                                        📋 Nhiệm vụ
                                     </button>
 
                                     <button
@@ -1715,5 +1349,3 @@
     </script>
 </body>
 </html>
-
-
