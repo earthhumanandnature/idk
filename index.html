@@ -1619,16 +1619,7 @@
 
                         {gameState === 'question' && currentFish && (
                             <div className="bg-white rounded-lg p-8 shadow-2xl max-w-md">
-                                const imagequestion = "infishingtime.png";
-                                <div
-                                  className="mb-4 p-4 rounded-lg"
-                                  style={{
-                                    backgroundImage: `
-                                      linear-gradient(${currentFish.color}20, ${currentFish.color}20),
-                                      url(${imagequestion})
-                                    `
-                                  }}
-                                >
+                                <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: currentFish.color + '20' }}>
                                     <div className="flex justify-center mb-2">
                                         <FishIcon size={48} color={currentFish.color} />
                                     </div>
@@ -1687,6 +1678,7 @@
     </script>
 </body>
 </html>
+
 
 
 
