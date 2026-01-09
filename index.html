@@ -91,9 +91,10 @@
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
                 { name: 'Uncommon', weight: 50, range: 20, time: 5, color: '#22C55E', price: 25 },
                 { name: 'Rare', weight: 30, range: 30, time: 6, color: '#3B82F6', price: 50 },
-                { name: 'Legendary', weight: 20, range: 40, time: 8, color: '#A855F7', price: 100 },
-                { name: 'Mythic', weight: 10, range: 50, time: 9, color: '#EF4444', price: 200 },
-                { name: 'Secret', weight: 1, range: 60, time: 10, color: '#F59E0B', price: 500 }
+                { name: 'Legendary', weight: 20, range: 40, time: 8, color: '#A855F7', price: 75 },
+                { name: 'Mythic', weight: 10, range: 50, time: 9, color: '#EF4444', price: 100 },
+                { name: 'Secret', weight: 1, range: 60, time: 10, color: '#F59E0B', price: 150 },
+                { name: 'Special(admin)', weight: 0, range: 0, time: 0, color: '#FFD700', price: NaN }
             ];
 
             const fishNames = {
@@ -102,7 +103,8 @@
                 'Rare': ['Cá Kiếm', 'Cá Mập Nhỏ', 'Cá Voi Con', 'Cá Heo'],
                 'Legendary': ['Cá Mập Trắng', 'Cá Voi Xanh', 'Cá Sấu', 'Cá Rồng'],
                 'Mythic': ['Cá Rồng Vàng', 'Cá Phượng Hoàng', 'Cá Kỳ Lân', 'Leviathan'],
-                'Secret': ['Cá Thần', 'Poseidon', 'Kraken', 'Cá Rồng Cổ Đại']
+                'Secret': ['Cá Thần', 'Poseidon', 'Kraken', 'Cá Rồng Cổ Đại'],
+                'Special(admin)':['Tralalelo Tralala', 'Trippi Troppi Troppa Trippa(shirm)', 'Trippi Troppi Troppa Trippa(frog)']
             };
 
             const baitInfo = {
@@ -113,7 +115,8 @@
                     color: '#9CA3AF',
                     difficulty: {
                         'Common': 0, 'Uncommon': 0, 'Rare': 0,
-                        'Legendary': 0, 'Mythic': 0, 'Secret': 0
+                        'Legendary': 0, 'Mythic': 0, 'Secret'0,
+                        'Special(admin)':0
                     }
                 },
                 'fish': {
@@ -124,7 +127,9 @@
                     price: 100,
                     difficulty: {
                         'Common': 20, 'Uncommon': 15, 'Rare': 10,
-                        'Legendary': 5, 'Mythic': 2, 'Secret': 1
+                        'Legendary': 5, 'Mythic': 2, 'Secret': 1,
+                        'Special(admin)':0
+
                     }
                 },
                 'update': {
@@ -135,7 +140,8 @@
                     price: 300,
                     difficulty: {
                         'Common': 40, 'Uncommon': 35, 'Rare': 30,
-                        'Legendary': 25, 'Mythic': 20, 'Secret': 10
+                        'Legendary': 25, 'Mythic': 20, 'Secret': 10,
+                        'Special(admin)':0
                     }
                 },
                 'secret': {
@@ -146,7 +152,8 @@
                     price: 500,
                     difficulty: {
                         'Common': 80, 'Uncommon': 75, 'Rare': 70,
-                        'Legendary': 65, 'Mythic': 60, 'Secret': 55
+                        'Legendary': 65, 'Mythic': 60, 'Secret': 55,
+                        'Special(admin)':0
                     }
                 }
             };
@@ -1700,3 +1707,4 @@
     </script>
 </body>
 </html>
+
