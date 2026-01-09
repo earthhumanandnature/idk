@@ -1492,11 +1492,18 @@
             }
 
             return (
-                <div className={`min-h-screen flex items-center justify-center transition-all duration-500 ${
-                    gameState === 'fishing' || gameState === 'question' 
-                        ? 'bg-gradient-to-b from-blue-400 to-blue-600' 
-                        : 'bg-gradient-to-b from-cyan-300 to-teal-400'
-                }`}>
+                <div
+                  className={`min-h-screen flex items-center justify-center transition-all duration-500 bg-cover bg-center ${
+                    gameState === 'fishing' || gameState === 'question'
+                      ? ''
+                      : ''
+                  }`}
+                  style={
+                    gameState === 'fishing' || gameState === 'question'
+                      ? { backgroundImage: "url('infishingtime.jpg')" }
+                      : { backgroundImage: "url('infishingtime.jpg')" }
+                  }
+                >
                     <div className="fixed top-4 left-4 bg-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3">
                         <span className="text-lg">👤 <strong>{currentUser}</strong></span>
                         <button
@@ -1684,6 +1691,7 @@
     </script>
 </body>
 </html>
+
 
 
 
