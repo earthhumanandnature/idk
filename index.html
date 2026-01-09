@@ -86,6 +86,15 @@
             const [dailyQuests, setDailyQuests] = useState([]);
             const [showQuests, setShowQuests] = useState(false);
             const [lastQuestReset, setLastQuestReset] = useState(null);
+            const musicList = ['music1.mp3', 'music2.mp3', 'music3.mp3', 'music4.mp3', 'music5.mp3'];
+            const [currentTrack, setCurrentTrack] = useState(0);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [isMuted, setIsMuted] = useState(false);
+            const [isLooping, setIsLooping] = useState(true);
+            const [currentTime, setCurrentTime] = useState(0);
+            const [duration, setDuration] = useState(0);
+            const [showMusicPlayer, setShowMusicPlayer] = useState(false);
+            const audioRef = useRef(null);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -1700,6 +1709,7 @@
     </script>
 </body>
 </html>
+
 
 
 
