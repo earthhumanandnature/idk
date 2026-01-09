@@ -1266,7 +1266,10 @@
                     : [...leaderboardData].sort((a, b) => b.money - a.money);
 
                 return (
-                    <div className="min-h-screen bg-gradient-to-b from-yellow-400 to-orange-600 p-8">
+                    <div
+                      className="min-h-screen bg-cover bg-center p-8"
+                      style={{ backgroundImage: "url('inleaderboard.jpg')" }}
+                    >
                         <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
                             <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
                         </div>
@@ -1691,6 +1694,7 @@
     </script>
 </body>
 </html>
+
 
 
 
