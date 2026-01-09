@@ -53,6 +53,18 @@
             </svg>
         );
 
+        const MusicPlayer = () => {
+            const [playlist] = useState([
+                { id: 1, name: 'Music 1', file: 'music1.mp3' },
+                { id: 2, name: 'Music 2', file: 'music2.mp3' },
+                { id: 3, name: 'Music 3', file: 'music3.mp3' },
+                { id: 4, name: 'Music 4', file: 'music4.mp3' },
+                { id: 5, name: 'Music 5', file: 'music5.mp3' }
+            ]);
+    
+            // ... (copy toàn bộ code từ artifact phía trên)
+        };
+
         const FishingGame = () => {
             const [gameState, setGameState] = useState('login');
             const [loginMode, setLoginMode] = useState('login');
@@ -1522,6 +1534,7 @@
                       : { backgroundImage: "url('background.jpg')" }
                   }
                 >
+                    <MusicPlayer />
                     <div className="fixed top-4 left-4 bg-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3">
                         <span className="text-lg">👤 <strong>{currentUser}</strong></span>
                         <button
@@ -1709,6 +1722,7 @@
     </script>
 </body>
 </html>
+
 
 
 
