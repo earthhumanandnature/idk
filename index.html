@@ -859,7 +859,10 @@
 
             if (gameState === 'login') {
                 return (
-                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-600 to-purple-800">
+                    <div
+                      className="min-h-screen bg-cover bg-center p-8"
+                      style={{ backgroundImage: "url('background.jpg')" }}
+                    >
                         <div className="bg-white rounded-xl shadow-2xl p-12 max-w-md w-full mx-4">
                             <h1 className="text-4xl font-bold text-center mb-8 text-gray-800">🎣 Game Câu Cá 2D</h1>
                             <p className="text-center text-sm text-green-600 font-semibold mb-4">✅ Sử dụng Firebase</p>
@@ -1697,6 +1700,7 @@
     </script>
 </body>
 </html>
+
 
 
 
