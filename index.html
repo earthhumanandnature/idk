@@ -97,6 +97,8 @@
                 { name: 'Special(admin)', weight: 0, range: 0, time: 0, color: '#FFD700', price: NaN }
             ];
 
+            const isAdmin = currentUser === 'vvt158214@gmail.com';
+
             const fishNames = {
                 'Common': ['Cá Rô', 'Cá Chép', 'Cá Trê', 'Cá Lóc'],
                 'Uncommon': ['Cá Hồi', 'Cá Ngừ', 'Cá Chim', 'Cá Basa'],
@@ -233,6 +235,144 @@
                     unlocks: 'secret'
                 }
             ];
+
+            const executeAdminCommand = async () => {
+                if (!isAdmin) {
+                    setAdminOutput('❌ Bạn không có quyền sử dụng lệnh này!');
+                    return;
+                }
+
+                const parts = adminCommand.trim().split(' ');
+                const command = parts[0].toLowerCase();
+
+                try {
+                    if (command === '/givefish') {
+                        // /givefish <tên cá> <email>
+                        if (parts.length < 3) {
+                            setAdminOutput('❌ Cú pháp: /givefish <tên cá> <email>');
+                            return;
+                        }
+
+                        const fishName = parts.slice(1, -1).join(' ');
+                        const targetEmail = parts[parts.length - 1];
+
+                        // Tìm user theo email
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+                        
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+
+                        const targetUserId = usersSnapshot.docs[0].id;
+
+                        // Tìm rarity và color của cá
+                        let fishRarity = 'Common';
+                        let fishColor = '#9CA3AF';
+                        
+                        for (const [rarity, names] of Object.entries(fishNames)) {
+                            if (names.some(name => name.toLowerCase() === fishName.toLowerCase())) {
+                                fishRarity = rarity;
+                                fishColor = rarities.find(r => r.name === rarity)?.color || '#9CA3AF';
+                                break;
+                            }
+                        }
+
+                        // Thêm cá vào inventory
+                        await db.collection('users').doc(targetUserId).collection('inventory').add({
+                            name: fishName,
+                            rarity: fishRarity,
+                            weight: 1.0,
+                            price: rarities.find(r => r.name === fishRarity)?.price || 10,
+                            color: fishColor,
+                            favourite: false,
+                            caughtAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            adminGiven: true
+                        });
+
+                        setAdminOutput(`✅ Đã tặng "${fishName}" cho ${targetEmail}`);
+                        
+                    } else if (command === '/givemoney') {
+                        // /givemoney <số xu> <email>
+                        if (parts.length !== 3) {
+                            setAdminOutput('❌ Cú pháp: /givemoney <số xu> <email>');
+                            return;
+                        }
+
+                        const amount = parseInt(parts[1]);
+                        const targetEmail = parts[2];
+
+                        if (isNaN(amount)) {
+                            setAdminOutput('❌ Số xu phải là số!');
+                            return;
+                        }
+
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+                        
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+
+                        const targetUserId = usersSnapshot.docs[0].id;
+                        const userData = usersSnapshot.docs[0].data();
+                        const newMoney = (userData.money || 0) + amount;
+
+                        await db.collection('users').doc(targetUserId).update({ money: newMoney });
+
+                        setAdminOutput(`✅ Đã tặng ${amount} xu cho ${targetEmail}`);
+
+                    } else if (command === '/giverod') {
+                        // /giverod <loại cần> <email>
+                        if (parts.length !== 3) {
+                            setAdminOutput('❌ Cú pháp: /giverod <legendary|mythic|secret> <email>');
+                            return;
+                        }
+
+                        const rodType = parts[1].toLowerCase();
+                        const targetEmail = parts[2];
+
+                        if (!['legendary', 'mythic', 'secret'].includes(rodType)) {
+                            setAdminOutput('❌ Loại cần không hợp lệ! (legendary, mythic, secret)');
+                            return;
+                        }
+
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+                        
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+
+                        const targetUserId = usersSnapshot.docs[0].id;
+                        const userData = usersSnapshot.docs[0].data();
+                        const ownedRods = userData.ownedRods || ['normal'];
+
+                        if (!ownedRods.includes(rodType)) {
+                            ownedRods.push(rodType);
+                            await db.collection('users').doc(targetUserId).update({ ownedRods });
+                            setAdminOutput(`✅ Đã tặng cần câu ${rodType} cho ${targetEmail}`);
+                        } else {
+                            setAdminOutput(`⚠️ ${targetEmail} đã có cần câu ${rodType}`);
+                        }
+
+                    } else if (command === '/help') {
+                        setAdminOutput(`
+                        📋 Danh sách lệnh Admin:
+                        /givefish <tên cá> <email> - Tặng cá
+                        /givemoney <số xu> <email> - Tặng xu
+                        /giverod <legendary|mythic|secret> <email> - Tặng cần câu
+                        /help - Hiển thị trợ giúp
+                        `);
+
+                    } else {
+                        setAdminOutput('❌ Lệnh không hợp lệ! Gõ /help để xem danh sách lệnh.');
+                    }
+
+                } catch (error) {
+                    setAdminOutput(`❌ Lỗi: ${error.message}`);
+                }
+            };
 
             // Kiểm tra Firebase config
             useEffect(() => {
@@ -840,6 +980,68 @@
                     default: return '#9CA3AF';
                 }
             };
+
+            // Admin Panel UI
+            if (showAdminPanel) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                        </div>
+                        
+                        <div className="max-w-4xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h2 className="text-3xl font-bold text-gray-800">⚙️ Admin Command Panel</h2>
+                                        <p className="text-sm text-gray-600 mt-1">Quyền Admin: {currentUser}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowAdminPanel(false)}
+                                        className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                                    <h3 className="font-bold mb-2">📋 Danh sách lệnh:</h3>
+                                    <div className="text-sm text-gray-700 space-y-1">
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/givefish &lt;tên cá&gt; &lt;email&gt;</code> - Tặng cá cho người chơi</p>
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/givemoney &lt;số xu&gt; &lt;email&gt;</code> - Tặng xu cho người chơi</p>
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/giverod &lt;legendary|mythic|secret&gt; &lt;email&gt;</code> - Tặng cần câu</p>
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/help</code> - Hiển thị trợ giúp</p>
+                                    </div>
+                                </div>
+
+                                <div className="mb-4">
+                                    <input
+                                        type="text"
+                                        value={adminCommand}
+                                        onChange={(e) => setAdminCommand(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && executeAdminCommand()}
+                                        placeholder="Nhập lệnh... (ví dụ: /givefish Cá Rồng abc@gmail.com)"
+                                        className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={executeAdminCommand}
+                                    className="w-full py-3 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition mb-4"
+                                >
+                                    ▶️ Thực thi lệnh
+                                </button>
+
+                                {adminOutput && (
+                                    <div className="p-4 bg-gray-900 text-green-400 rounded-lg font-mono text-sm whitespace-pre-wrap">
+                                        {adminOutput}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
 
             if (configError) {
                 return (
@@ -1601,6 +1803,15 @@
                                         )}
                                     </button>
 
+                                    {isAdmin && (
+                                        <button
+                                            onClick={() => setShowAdminPanel(true)}
+                                            className="px-8 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white text-xl rounded-lg hover:from-red-700 hover:to-pink-700 transform hover:scale-105 transition shadow-lg border-2 border-yellow-400 animate-pulse"
+                                        >
+                                            ⚙️ Admin Command
+                                        </button>
+                                    )}
+
                                     <button
                                         onClick={() => {
                                             setShowLeaderboard(true);
@@ -1707,6 +1918,7 @@
     </script>
 </body>
 </html>
+
 
 
 
