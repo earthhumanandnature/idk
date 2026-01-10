@@ -495,8 +495,6 @@
             const [displayMoney, setDisplayMoney] = useState(0);
             const [moneyChange, setMoneyChange] = useState(0);
             const [showMoneyChange, setShowMoneyChange] = useState(false);
-            const [isBanned, setIsBanned] = useState(false);
-            const [showBannedModal, setShowBannedModal] = useState(false);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -676,54 +674,6 @@
                 }
             ];
 
-            const deleteAccount = async () => {
-                if (!userId) return;
-                
-                try {
-                    // Delete all user data
-                    const batch = db.batch();
-                    
-                    // Delete inventory
-                    const inventorySnapshot = await db.collection('users').doc(userId).collection('inventory').get();
-                    inventorySnapshot.docs.forEach(doc => {
-                        batch.delete(doc.ref);
-                    });
-                    
-                    // Delete quests
-                    const questDoc = await db.collection('users').doc(userId).collection('quests').doc('daily');
-                    batch.delete(questDoc);
-                    
-                    // Delete user document
-                    batch.delete(db.collection('users').doc(userId));
-                    
-                    await batch.commit();
-                    
-                    // Delete auth account
-                    const user = auth.currentUser;
-                    if (user) {
-                        await user.delete();
-                    }
-                    
-                    // Reset state
-                    setUserId(null);
-                    setCurrentUser(null);
-                    setMoney(0);
-                    setInventory([]);
-                    setEmail('');
-                    setPassword('');
-                    setConfirmPassword('');
-                    setLoginMode('login');
-                    setGameState('login');
-                    setShowBannedModal(false);
-                    setIsBanned(false);
-                    
-                    alert('Tài khoản đã được xóa thành công');
-                } catch (error) {
-                    console.error('Error deleting account:', error);
-                    alert('Lỗi khi xóa tài khoản: ' + error.message);
-                }
-            };
-
             const executeAdminCommand = async () => {
                 if (!isAdmin) {
                     setAdminOutput('❌ Bạn không có quyền sử dụng lệnh này!');
@@ -734,53 +684,7 @@
                 const command = parts[0].toLowerCase();
 
                 try {
-                    if (command === '/ban') {
-                        if (parts.length !== 2) {
-                            setAdminOutput('❌ Cú pháp: /ban <email>');
-                            return;
-                        }
-
-                        const targetEmail = parts[1];
-                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
-                        
-                        if (usersSnapshot.empty) {
-                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
-                            return;
-                        }
-
-                        const targetUserId = usersSnapshot.docs[0].id;
-                        await db.collection('users').doc(targetUserId).update({ 
-                            banned: true,
-                            bannedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            bannedBy: currentUser
-                        });
-
-                        setAdminOutput(`✅ Đã ban ${targetEmail} thành công!`);
-
-                    } else if (command === '/unban') {
-                        if (parts.length !== 2) {
-                            setAdminOutput('❌ Cú pháp: /unban <email>');
-                            return;
-                        }
-
-                        const targetEmail = parts[1];
-                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
-                        
-                        if (usersSnapshot.empty) {
-                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
-                            return;
-                        }
-
-                        const targetUserId = usersSnapshot.docs[0].id;
-                        await db.collection('users').doc(targetUserId).update({ 
-                            banned: false,
-                            unbannedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            unbannedBy: currentUser
-                        });
-
-                        setAdminOutput(`✅ Đã unban ${targetEmail} thành công!`);
-
-                    } else if (command === '/givefish') {
+                    if (command === '/givefish') {
                         if (parts.length < 3) {
                             setAdminOutput('❌ Cú pháp: /givefish <tên cá> <email>');
                             return;
@@ -810,6 +714,7 @@
                             }
                         }
 
+                        // ⭐ TÍNH CÂN NẶNG NGẪU NHIÊN GIỐNG KHI CÂU
                         let weight = 1.0;
                         let increaseChance = 1.0;
                         while (Math.random() < increaseChance) {
@@ -818,6 +723,7 @@
                         }
                         weight = Math.round(weight * 10) / 10;
 
+                        // ⭐ TÍNH GIÁ THEO CÂN NẶNG
                         const fishPrice = Math.round(basePrice * weight);
 
                         await db.collection('users').doc(targetUserId).collection('inventory').add({
@@ -890,7 +796,6 @@
                         if (!ownedRods.includes(rodType)) {
                             ownedRods.push(rodType);
                             await db.collection('users').doc(targetUserId).update({ ownedRods });
-
                             setAdminOutput(`✅ Đã tặng cần câu ${rodType} cho ${targetEmail}`);
                         } else {
                             setAdminOutput(`⚠️ ${targetEmail} đã có cần câu ${rodType}`);
@@ -900,28 +805,21 @@
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
                         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                        /ban <email>
-                          → Ban người chơi
-                          → VD: /ban player@gmail.com
-
-                        /unban <email>
-                          → Gỡ ban người chơi
-                          → VD: /unban player@gmail.com
-
                         /givefish <tên cá> <email>
-                          → Tặng cá cho người chơi
+                          → Tặng cá cho BẤT KỲ người chơi nào
                           → VD: /givefish Cá Rồng player@gmail.com
 
                         /givemoney <số xu> <email>
-                          → Tặng xu cho người chơi  
+                          → Tặng xu cho BẤT KỲ người chơi nào  
                           → VD: /givemoney 1000 player@gmail.com
 
                         /giverod <legendary|mythic|secret> <email>
-                          → Tặng cần câu cho người chơi
+                          → Tặng cần câu cho BẤT KỲ người chơi nào
                           → VD: /giverod mythic player@gmail.com
 
                         /help - Hiển thị trợ giúp
                         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                        ✅ Bạn có thể give cho MỌI email, không chỉ admin!
                         `);
 
                     } else {
@@ -1574,30 +1472,6 @@
                     default: return '#9CA3AF';
                 }
             };
-
-            if (showBannedModal && isBanned) {
-                return (
-                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-900 to-black p-8">
-                        <div className="bg-white rounded-xl shadow-2xl p-12 max-w-md w-full mx-4">
-                            <div className="text-center mb-6">
-                                <div className="text-6xl mb-4">🚫</div>
-                                <h1 className="text-4xl font-bold text-red-600 mb-4">Tài khoản bị khóa</h1>
-                                <p className="text-xl text-gray-700 mb-6">
-                                    Bạn đã bị ban khỏi game.<br/>
-                                    Vui lòng xóa tài khoản để tiếp tục.
-                                </p>
-                            </div>
-                            
-                            <button
-                                onClick={deleteAccount}
-                                className="w-full py-4 bg-red-600 text-white text-xl font-bold rounded-lg hover:bg-red-700 transition"
-                            >
-                                Đồng ý - Xóa tài khoản
-                            </button>
-                        </div>
-                    </div>
-                );
-            }
 
             // Admin Panel UI
             if (showAdminPanel) {
@@ -2706,5 +2580,3 @@
     </script>
 </body>
 </html>
-
-
