@@ -618,7 +618,7 @@
                     q.id === questId ? { ...q, claimed: true } : q
                 );
     
-                updateMoneyWithAnimation(newMoney, -item.price);
+                updateMoneyWithAnimation(newMoney, quest.reward);
                 setDailyQuests(newQuests);
     
                 try {
@@ -864,16 +864,17 @@
 
             const checkAnswer = async () => {
                 const userAnswer = parseInt(answer);
-    
+
                 if (userAnswer === currentFish.math.correctAnswer) {
                     try {
                         // Cập nhật nhiệm vụ giải toán
                         await updateQuestProgress('solve', 1);
-            
+    
                         // Cập nhật nhiệm vụ câu cá
                         await updateQuestProgress('catch', 1, currentFish.rarity);
-            
-                        await db.collection('users').doc(userId).collection('inventory').add({
+    
+                        // Thêm cá vào Firestore
+                        const docRef = await db.collection('users').doc(userId).collection('inventory').add({
                             name: currentFish.name,
                             rarity: currentFish.rarity,
                             weight: currentFish.weight,
@@ -883,10 +884,22 @@
                             caughtAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
 
+                        // Thêm cá vào state inventory (không xóa cá cũ)
+                        setInventory(prevInventory => [
+                            ...prevInventory,
+                            {
+                                id: docRef.id,
+                                name: currentFish.name,
+                                rarity: currentFish.rarity,
+                                weight: currentFish.weight,
+                                price: currentFish.price,
+                                color: currentFish.color,
+                                favourite: false
+                            }
+                        ]);
+
                         setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
-            
-                        await loadGameData(userId);
-            
+    
                         setGameState('result');
                         setTimeout(() => {
                             setGameState('menu');
@@ -933,7 +946,7 @@
                     await batch.commit();
 
                     const newMoney = money + totalMoney;
-                    updateMoneyWithAnimation(newMoney, -item.price);
+                    updateMoneyWithAnimation(newMoney, totalMoney);
                     await db.collection('users').doc(userId).update({ money: newMoney });
         
                     // Cập nhật nhiệm vụ kiếm tiền
@@ -993,7 +1006,7 @@
                 const newMoney = money - bait.price;
                 const newOwnedBaits = [...ownedBaits, baitType];
 
-                updateMoneyWithAnimation(newMoney, -item.price);
+                updateMoneyWithAnimation(newMoney, -bait.price);
                 setOwnedBaits(newOwnedBaits);
                 
                 await db.collection('users').doc(userId).update({
@@ -2157,6 +2170,7 @@
     </script>
 </body>
 </html>
+
 
 
 
