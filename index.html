@@ -495,6 +495,7 @@
             const [displayMoney, setDisplayMoney] = useState(0);
             const [moneyChange, setMoneyChange] = useState(0);
             const [showMoneyChange, setShowMoneyChange] = useState(false);
+            const [isBanned, setIsBanned] = useState(false);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -738,6 +739,35 @@
                         });
 
                         setAdminOutput(`✅ Đã tặng "${fishName}" (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
+
+                    } else if (command === '/ban') {
+                        if (parts.length !== 2) {
+                            setAdminOutput('❌ Cú pháp: /ban <email>');
+                            return;
+                        }
+                        const targetEmail = parts[1];
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+                        const targetUserId = usersSnapshot.docs[0].id;
+                        await db.collection('users').doc(targetUserId).update({ banned: true });
+                        setAdminOutput(`✅ Đã ban ${targetEmail}`);
+                    } else if (command === '/unban') {
+                        if (parts.length !== 2) {
+                            setAdminOutput('❌ Cú pháp: /unban <email>');
+                            return;
+                        }
+                        const targetEmail = parts[1];
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+                        const targetUserId = usersSnapshot.docs[0].id;
+                        await db.collection('users').doc(targetUserId).update({ banned: false });
+                        setAdminOutput(`✅ Đã unban ${targetEmail}`);
                 
                     } else if (command === '/givemoney') {
                         if (parts.length !== 3) {
@@ -888,6 +918,11 @@
                     const gameDoc = await db.collection('users').doc(uid).get();
                     if (gameDoc.exists) {
                         const data = gameDoc.data();
+                        if (data.banned === true) {
+                            setIsBanned(true);
+                            setGameState('banned'); // Thêm state mới 'banned'
+                            return; // Dừng load nếu banned
+                        }
                         setMoney(data.money || 0);
                         setFishingRod(data.fishingRod || 'normal');
                         setOwnedRods(data.ownedRods || ['normal']);
@@ -1120,6 +1155,7 @@
                         ownedRods: ['normal'],
                         currentBait: 'normal',
                         ownedBaits: ['normal'],
+                        banned: false,
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
@@ -1371,6 +1407,48 @@
                     }
                 } catch (error) {
                     alert('Lỗi khi bán cá: ' + error.message);
+                }
+            };
+
+            const deleteAccount = async () => {
+                if (window.confirm('Bạn chắc chắn muốn xóa tài khoản? Hành động này không thể khôi phục!')) {
+                    try {
+                        const user = auth.currentUser;
+                        if (user) {
+                            // Xóa subcollections trước (inventory và quests)
+                            const inventoryRef = db.collection('users').doc(user.uid).collection('inventory');
+                            const inventoryDocs = await inventoryRef.get();
+                            const batch = db.batch();
+                            inventoryDocs.docs.forEach(doc => batch.delete(doc.ref));
+                            await batch.commit();
+
+                            const questsRef = db.collection('users').doc(user.uid).collection('quests');
+                            const questsDocs = await questsRef.get();
+                            questsDocs.docs.forEach(doc => batch.delete(doc.ref)); // Batch mới nếu cần
+                            await batch.commit();
+
+                            // Xóa document user
+                            await db.collection('users').doc(user.uid).delete();
+
+                            // Xóa auth user
+                            await user.delete();
+
+                            // Sign out và reset state
+                            await auth.signOut();
+                            setUserId(null);
+                            setCurrentUser(null);
+                            setGameState('login');
+                            alert('Tài khoản đã được xóa thành công!');
+                        }
+                    } catch (error) {
+                        if (error.code === 'auth/requires-recent-login') {
+                            alert('Vui lòng đăng nhập lại để xóa tài khoản!');
+                            await auth.signOut();
+                            setGameState('login');
+                        } else {
+                            alert('Lỗi khi xóa tài khoản: ' + error.message);
+                        }
+                    }
                 }
             };
 
@@ -1644,6 +1722,33 @@
                                         {adminOutput}
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (gameState === 'banned') {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-600 to-red-800 p-8">
+                        <div className="bg-white rounded-xl shadow-2xl p-12 max-w-md w-full mx-4">
+                            <h1 className="text-4xl font-bold text-center mb-6 text-red-600">⚠️ Tài Khoản Bị Ban</h1>
+                            <p className="text-lg text-center text-gray-800 mb-8">
+                                Bạn đã bị ban. Vui lòng liên hệ Discord <a href="https://discord.gg/8fHj47BH" target="_blank" className="text-blue-600 underline">https://discord.gg/8fHj47BH</a> để được hỗ trợ hoặc xóa tài khoản qua nút dưới.
+                            </p>
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={deleteAccount}
+                                    className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                                >
+                                    Xóa tài khoản
+                                </button>
+                                <button
+                                    onClick={handleLogout}
+                                    className="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
+                                >
+                                    Đăng xuất
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2580,3 +2685,4 @@
     </script>
 </body>
 </html>
+
