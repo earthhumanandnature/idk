@@ -264,22 +264,6 @@
                 }
             }, [money, fishingRod, ownedRods, currentBait, ownedBaits, userId]);
 
-            useEffect(() => {
-                function getLocalIP(callback) {
-                    const rtc = new RTCPeerConnection({iceServers: []});
-                    rtc.createDataChannel('');
-                    rtc.createOffer().then(offer => rtc.setLocalDescription(offer));
-                    rtc.onicecandidate = (event) => {
-                        if (event.candidate) {
-                            const ipMatch = /([0-9a-f:]+:+)+[0-9a-f]+/i.exec(event.candidate.candidate);
-                            if (ipMatch) {
-                                callback(ipMatch[0]);
-                                rtc.onicecandidate = null;
-                            }
-                        }
-                    };
-                }
-
             const loadGameData = async (uid) => {
                 try {
                     const gameDoc = await db.collection('users').doc(uid).get();
@@ -1723,6 +1707,7 @@
     </script>
 </body>
 </html>
+
 
 
 
