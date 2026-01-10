@@ -495,12 +495,6 @@
             const [displayMoney, setDisplayMoney] = useState(0);
             const [moneyChange, setMoneyChange] = useState(0);
             const [showMoneyChange, setShowMoneyChange] = useState(false);
-            const [isBanned, setIsBanned] = useState(false);
-            const [showBannedModal, setShowBannedModal] = useState(false);
-            const [showLogs, setShowLogs] = useState(false);
-            const [logs, setLogs] = useState([]);
-            const [loadingLogs, setLoadingLogs] = useState(false);
-            const [logFilter, setLogFilter] = useState('all');
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -680,47 +674,6 @@
                 }
             ];
 
-            const logActivity = async (action, details) => {
-                if (!userId || !currentUser) return;
-                
-                try {
-                    await db.collection('logs').add({
-                        userId: userId,
-                        userEmail: currentUser,
-                        action: action,
-                        details: details,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                } catch (error) {
-                    console.error('Error logging activity:', error);
-                }
-            };
-
-            const loadLogs = async () => {
-                setLoadingLogs(true);
-                try {
-                    let query = db.collection('logs').orderBy('timestamp', 'desc').limit(100);
-                    
-                    if (logFilter !== 'all') {
-                        query = query.where('action', '==', logFilter);
-                    }
-                    
-                    const snapshot = await query.get();
-                    const logData = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data(),
-                        timestamp: doc.data().timestamp?.toDate()
-                    }));
-                    
-                    setLogs(logData);
-                } catch (error) {
-                    console.error('Error loading logs:', error);
-                } finally {
-                    setLoadingLogs(false);
-                }
-            };
-
-            // ⭐ NEW: Delete account (for banned users)
             const deleteAccount = async () => {
                 if (!userId) return;
                 
@@ -1623,19 +1576,6 @@
                 }
             };
 
-            const getRodName = () => {
-                return getRodNameByType(fishingRod);
-            };
-
-            const getRodNameByType = (type) => {
-                switch(type) {
-                    case 'legendary': return 'New Rank Fish!';
-                    case 'mythic': return 'Mythical Fishing Rod';
-                    case 'secret': return 'Mysterious Fishing Rod';
-                    default: return 'Normal Rod';
-                }
-            };
-
             const getRodDescription = (type) => {
                 switch(type) {
                     case 'legendary': return 'Câu được cá đến Legendary';
@@ -1653,193 +1593,6 @@
                     default: return '#9CA3AF';
                 }
             };
-
-            const formatTimestamp = (timestamp) => {
-                if (!timestamp) return 'N/A';
-                const date = new Date(timestamp);
-                return date.toLocaleString('vi-VN');
-            };
-
-            const getActionIcon = (action) => {
-                switch(action) {
-                    case 'CATCH_FISH': return '🎣';
-                    case 'SELL_FISH': return '💵';
-                    case 'BUY_ROD': return '🎣';
-                    case 'BUY_BAIT': return '🪱';
-                    case 'CLAIM_QUEST_REWARD': return '🎁';
-                    case 'ADMIN_GIVE_FISH': return '🎁';
-                    case 'ADMIN_GIVE_MONEY': return '💰';
-                    case 'ADMIN_GIVE_ROD': return '🎣';
-                    case 'BAN_USER': return '🚫';
-                    case 'UNBAN_USER': return '✅';
-                    case 'LOGIN': return '🔑';
-                    case 'LOGOUT': return '🚪';
-                    case 'REGISTER': return '📝';
-                    default: return '📌';
-                }
-            };
-
-            const getActionName = (action) => {
-                switch(action) {
-                    case 'CATCH_FISH': return 'Câu cá';
-                    case 'SELL_FISH': return 'Bán cá';
-                    case 'BUY_ROD': return 'Mua cần câu';
-                    case 'BUY_BAIT': return 'Mua mồi câu';
-                    case 'CLAIM_QUEST_REWARD': return 'Nhận thưởng nhiệm vụ';
-                    case 'ADMIN_GIVE_FISH': return 'Admin tặng cá';
-                    case 'ADMIN_GIVE_MONEY': return 'Admin tặng xu';
-                    case 'ADMIN_GIVE_ROD': return 'Admin tặng cần câu';
-                    case 'BAN_USER': return 'Ban người chơi';
-                    case 'UNBAN_USER': return 'Unban người chơi';
-                    case 'LOGIN': return 'Đăng nhập';
-                    case 'LOGOUT': return 'Đăng xuất';
-                    case 'REGISTER': return 'Đăng ký';
-                    default: return action;
-                }
-            };
-
-            if (showBannedModal && isBanned) {
-                return (
-                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-900 to-black p-8">
-                        <div className="bg-white rounded-xl shadow-2xl p-12 max-w-md w-full mx-4">
-                            <div className="text-center mb-6">
-                                <div className="text-6xl mb-4">🚫</div>
-                                <h1 className="text-4xl font-bold text-red-600 mb-4">Tài khoản bị khóa</h1>
-                                <p className="text-xl text-gray-700 mb-6">
-                                    Bạn đã bị ban khỏi game.<br/>
-                                    Vui lòng xóa tài khoản để tiếp tục.
-                                </p>
-                            </div>
-                            
-                            <button
-                                onClick={deleteAccount}
-                                className="w-full py-4 bg-red-600 text-white text-xl font-bold rounded-lg hover:bg-red-700 transition"
-                            >
-                                Đồng ý - Xóa tài khoản
-                            </button>
-                        </div>
-                    </div>
-                );
-            }
-
-            if (showLogs) {
-                return (
-                    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
-                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">
-                                💰 {formatMoney(Math.floor(displayMoney))} xu
-                            </p>
-                            {showMoneyChange && (
-                                <div 
-                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
-                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
-                                    }`}
-                                    style={{ animation: 'slideUp 2s ease-out forwards' }}
-                                >
-                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="max-w-6xl mx-auto">
-                            <div className="bg-white rounded-lg shadow-2xl p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h2 className="text-3xl font-bold text-gray-800">📊 Activity Logs</h2>
-                                        <p className="text-sm text-gray-600 mt-1">Lịch sử hoạt động của người chơi</p>
-                                    </div>
-                                    <button
-                                        onClick={() => setShowLogs(false)}
-                                        className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-                                    >
-                                        Quay lại
-                                    </button>
-                                </div>
-
-                                <div className="mb-6 flex gap-2">
-                                    <button
-                                        onClick={() => setLogFilter('all')}
-                                        className={`px-4 py-2 rounded-lg font-bold transition ${
-                                            logFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
-                                        }`}
-                                    >
-                                        Tất cả
-                                    </button>
-                                    <button
-                                        onClick={() => setLogFilter('CATCH_FISH')}
-                                        className={`px-4 py-2 rounded-lg font-bold transition ${
-                                            logFilter === 'CATCH_FISH' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
-                                        }`}
-                                    >
-                                        🎣 Câu cá
-                                    </button>
-                                    <button
-                                        onClick={() => setLogFilter('SELL_FISH')}
-                                        className={`px-4 py-2 rounded-lg font-bold transition ${
-                                            logFilter === 'SELL_FISH' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
-                                        }`}
-                                    >
-                                        💵 Bán cá
-                                    </button>
-                                    <button
-                                        onClick={() => setLogFilter('BAN_USER')}
-                                        className={`px-4 py-2 rounded-lg font-bold transition ${
-                                            logFilter === 'BAN_USER' ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'
-                                        }`}
-                                    >
-                                        🚫 Ban
-                                    </button>
-                                </div>
-
-                                <button
-                                    onClick={loadLogs}
-                                    disabled={loadingLogs}
-                                    className="w-full mb-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:bg-gray-400"
-                                >
-                                    {loadingLogs ? '⏳ Đang tải...' : '🔄 Làm mới'}
-                                </button>
-
-                                {loadingLogs ? (
-                                    <div className="text-center text-gray-500 text-xl py-12">
-                                        Đang tải logs...
-                                    </div>
-                                ) : logs.length === 0 ? (
-                                    <div className="text-center text-gray-500 text-xl py-12">
-                                        Chưa có logs
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                                        {logs.map((log) => (
-                                            <div
-                                                key={log.id}
-                                                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition"
-                                            >
-                                                <div className="flex items-center gap-4 flex-1">
-                                                    <span className="text-3xl">{getActionIcon(log.action)}</span>
-                                                    <div className="flex-1">
-                                                        <p className="font-bold text-gray-800">{log.userEmail}</p>
-                                                        <p className="text-sm text-gray-600">{getActionName(log.action)}</p>
-                                                        {log.details && (
-                                                            <p className="text-xs text-gray-500 mt-1">
-                                                                {JSON.stringify(log.details)}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-sm text-gray-600">
-                                                        {formatTimestamp(log.timestamp)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
 
             // Admin Panel UI
             if (showAdminPanel) {
@@ -2851,13 +2604,6 @@
                                     >
                                         🏆 Bảng xếp hạng
                                     </button>
-
-                                    <button
-                                        onClick={() => setLogs(true)}
-                                        className="px-8 py-3 bg-purple-600 text-white text-xl rounded-lg hover:bg-purple-700 transform hover:scale-105 transition shadow-lg"
-                                    >
-                                        📝 Logs
-                                    </button>
                                     
                                     <button
                                         onClick={() => setShowShop(true)}
@@ -2955,23 +2701,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
