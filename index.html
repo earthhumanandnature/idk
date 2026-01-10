@@ -743,29 +743,20 @@
                         setAdminOutput(`✅ Đã tặng "${fishName}" (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
 
                     } else if (command === '/ban') {
-                        // Cú pháp: /ban <email> [lý do...]
-                        if (parts.length < 2) {
-                            setAdminOutput('❌ Cú pháp: /ban <email> [lý do]');
-                            return;
-                        }
-                        const targetEmail = parts[1];
-                        const reason = parts.slice(2).join(' ') || 'Bị cấm bởi quản trị viên';
-                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+                      const targetUid = parts[1];
+                      if (!targetUid) {
+                        setAdminOutput('❌ /ban <uid>');
+                        return;
+                      }
 
-                        if (usersSnapshot.empty) {
-                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
-                            return;
-                        }
+                      await db.collection('users').doc(targetUid).update({
+                        banned: true,
+                        banReason: 'Bị ban bởi admin',
+                        bannedAt: firebase.firestore.FieldValue.serverTimestamp()
+                      });
 
-                        const targetUserId = usersSnapshot.docs[0].id;
-                        await db.collection('users').doc(targetUserId).update({
-                            banned: true,
-                            banReason: reason,
-                            bannedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            bannedBy: currentUser || 'admin'
-                        });
-
-                        setAdminOutput(`✅ Đã ban ${targetEmail}. Lý do: ${reason}`);
+                      setAdminOutput('✅ Đã ban UID: ' + targetUid);
+                    }
 
                     } else if (command === '/unban') {
                         // Cú pháp: /unban <email>
@@ -2711,5 +2702,6 @@
     </script>
 </body>
 </html>
+
 
 
