@@ -938,7 +938,7 @@
 
             const loadGameData = async (uid) => {
                 try {
-                    const gameDoc = await db.collection('users').doc(uid).get();
+                    const serverDoc = await db.collection('users').doc(uid).get({ source: 'server' });
                     if (gameDoc.exists) {
                         const data = gameDoc.data();
                         if (data.banned) {
@@ -2711,4 +2711,5 @@
     </script>
 </body>
 </html>
+
 
