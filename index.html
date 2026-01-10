@@ -495,9 +495,6 @@
             const [displayMoney, setDisplayMoney] = useState(0);
             const [moneyChange, setMoneyChange] = useState(0);
             const [showMoneyChange, setShowMoneyChange] = useState(false);
-            const [isBanned, setIsBanned] = useState(false);
-            const [banReason, setBanReason] = useState('');
-            const [banInfo, setBanInfo] = useState(null); // optional: lưu object {banReason, bannedAt, bannedBy}
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -741,47 +738,6 @@
                         });
 
                         setAdminOutput(`✅ Đã tặng "${fishName}" (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
-
-                    } else if (command === '/ban') {
-                      const targetUid = parts[1];
-                      if (!targetUid) {
-                        setAdminOutput('❌ /ban <uid>');
-                        return;
-                      }
-
-                      await db.collection('users').doc(targetUid).update({
-                        banned: true,
-                        banReason: 'Bị ban bởi admin',
-                        bannedAt: firebase.firestore.FieldValue.serverTimestamp()
-                      });
-
-                      setAdminOutput('✅ Đã ban UID: ' + targetUid);
-                    }
-
-                    } else if (command === '/unban') {
-                        // Cú pháp: /unban <email>
-                        if (parts.length !== 2) {
-                            setAdminOutput('❌ Cú pháp: /unban <email>');
-                            return;
-                        }
-                        const targetEmail = parts[1];
-                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
-
-                        if (usersSnapshot.empty) {
-                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
-                            return;
-                        }
-
-                        const targetUserId = usersSnapshot.docs[0].id;
-                        // Clear các trường ban
-                        await db.collection('users').doc(targetUserId).update({
-                            banned: false,
-                            banReason: firebase.firestore.FieldValue.delete(),
-                            bannedAt: firebase.firestore.FieldValue.delete(),
-                            bannedBy: firebase.firestore.FieldValue.delete()
-                        });
-
-                        setAdminOutput(`✅ Đã unban ${targetEmail}.`);
                 
                     } else if (command === '/givemoney') {
                         if (parts.length !== 3) {
@@ -929,28 +885,9 @@
 
             const loadGameData = async (uid) => {
                 try {
-                    const serverDoc = await db.collection('users').doc(uid).get({ source: 'server' });
+                    const gameDoc = await db.collection('users').doc(uid).get();
                     if (gameDoc.exists) {
                         const data = gameDoc.data();
-                        if (data.banned) {
-                            setIsBanned(true);
-                            setBanReason(data.banReason || 'Bạn đã bị cấm.');
-                            setBanInfo({
-                                reason: data.banReason || '',
-                                bannedAt: data.bannedAt,
-                                bannedBy: data.bannedBy || ''
-                            });
-                            // Chặn vào menu chính
-                            setGameState('banned');
-                            // Không tiếp tục tải các dữ liệu khác nếu muốn chặn hoàn toàn
-                            return;
-                        } else {
-                            setIsBanned(false);
-                            setBanReason('');
-                            setBanInfo(null);
-                        }
-
-                        // nếu không banned -> tiếp tục load bình thường
                         setMoney(data.money || 0);
                         setFishingRod(data.fishingRod || 'normal');
                         setOwnedRods(data.ownedRods || ['normal']);
@@ -1020,36 +957,6 @@
                     }
                 } catch (error) {
                     console.error('Lỗi khi kiểm tra nhiệm vụ:', error);
-                }
-            };
-
-            const deleteAccountAndData = async () => {
-                try {
-                    const user = auth.currentUser;
-                    if (!user) {
-                        alert('Không tìm thấy user.');
-                        return;
-                    }
-
-                    // Xóa document Firestore (nếu muốn)
-                    await db.collection('users').doc(user.uid).delete().catch(()=>{});
-                    // Sau đó xóa tài khoản auth
-                    await user.delete();
-
-                    alert('Tài khoản đã được xóa.');
-                    // reset local state
-                    setUserId(null);
-                    setCurrentUser(null);
-                    setMoney(0);
-                    setInventory([]);
-                    setGameState('login');
-                } catch (err) {
-                    console.error(err);
-                    if (err.code === 'auth/requires-recent-login') {
-                        alert('Vì lý do bảo mật, bạn cần đăng nhập lại trước khi xóa tài khoản. Vui lòng đăng xuất rồi đăng nhập lại và thử xóa.');
-                    } else {
-                        alert('Lỗi khi xóa tài khoản: ' + err.message);
-                    }
                 }
             };
 
@@ -1814,35 +1721,6 @@
                                     </button>
                                 </>
                             )}
-                        </div>
-                    </div>
-                );
-            }
-
-            if (gameState === 'banned') {
-                return (
-                    <div className="min-h-screen flex items-center justify-center bg-cover bg-center p-8">
-                        <div className="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4 text-center">
-                            <h2 className="text-3xl font-bold text-red-600 mb-4">⚠️ Tài khoản bị cấm</h2>
-                            <p className="mb-4">Bạn đã bị ban khỏi game.</p>
-                            {banReason && <p className="mb-4 text-sm text-gray-600">Lý do: {banReason}</p>}
-                            <p className="mb-6">Vui lòng truy cập <a href="https://discord.gg/8fHj47BH" target="_blank" rel="noreferrer" className="text-blue-600 underline">Discord hỗ trợ</a> để khiếu nại.</p>
-
-                            <div className="flex flex-col gap-3">
-                                <button
-                                    onClick={deleteAccountAndData}
-                                    className="w-full py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                                >
-                                    ❌ Xóa tài khoản
-                                </button>
-                                <button
-                                    onClick={() => { /* optional: log out */ auth.signOut(); setGameState('login'); }}
-                                    className="w-full py-3 bg-gray-200 rounded-lg"
-                                >
-                                    Đăng xuất
-                                </button>
-                            </div>
-
                         </div>
                     </div>
                 );
@@ -2702,6 +2580,3 @@
     </script>
 </body>
 </html>
-
-
-
