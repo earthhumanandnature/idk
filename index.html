@@ -685,7 +685,6 @@
 
                 try {
                     if (command === '/givefish') {
-                        // /givefish <tên cá> <email>
                         if (parts.length < 3) {
                             setAdminOutput('❌ Cú pháp: /givefish <tên cá> <email>');
                             return;
@@ -694,7 +693,6 @@
                         const fishName = parts.slice(1, -1).join(' ');
                         const targetEmail = parts[parts.length - 1];
 
-                        // Tìm user theo email
                         const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
                         
                         if (usersSnapshot.empty) {
@@ -704,7 +702,6 @@
 
                         const targetUserId = usersSnapshot.docs[0].id;
 
-                        // Tìm rarity và color của cá
                         let fishRarity = 'Common';
                         let fishColor = '#9CA3AF';
                         
@@ -716,7 +713,6 @@
                             }
                         }
 
-                        // Thêm cá vào inventory
                         await db.collection('users').doc(targetUserId).collection('inventory').add({
                             name: fishName,
                             rarity: fishRarity,
@@ -731,7 +727,6 @@
                         setAdminOutput(`✅ Đã tặng "${fishName}" cho ${targetEmail}`);
                         
                     } else if (command === '/givemoney') {
-                        // /givemoney <số xu> <email>
                         if (parts.length !== 3) {
                             setAdminOutput('❌ Cú pháp: /givemoney <số xu> <email>');
                             return;
@@ -761,7 +756,6 @@
                         setAdminOutput(`✅ Đã tặng ${amount} xu cho ${targetEmail}`);
 
                     } else if (command === '/giverod') {
-                        // /giverod <loại cần> <email>
                         if (parts.length !== 3) {
                             setAdminOutput('❌ Cú pháp: /giverod <legendary|mythic|secret> <email>');
                             return;
@@ -797,10 +791,22 @@
                     } else if (command === '/help') {
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
-                        /givefish <tên cá> <email> - Tặng cá
-                        /givemoney <số xu> <email> - Tặng xu
-                        /giverod <legendary|mythic|secret> <email> - Tặng cần câu
+                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                        /givefish <tên cá> <email>
+                          → Tặng cá cho BẤT KỲ người chơi nào
+                          → VD: /givefish Cá Rồng player@gmail.com
+
+                        /givemoney <số xu> <email>
+                          → Tặng xu cho BẤT KỲ người chơi nào  
+                          → VD: /givemoney 1000 player@gmail.com
+
+                        /giverod <legendary|mythic|secret> <email>
+                          → Tặng cần câu cho BẤT KỲ người chơi nào
+                          → VD: /giverod mythic player@gmail.com
+
                         /help - Hiển thị trợ giúp
+                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                        ✅ Bạn có thể give cho MỌI email, không chỉ admin!
                         `);
 
                     } else {
@@ -2561,6 +2567,7 @@
     </script>
 </body>
 </html>
+
 
 
 
