@@ -755,8 +755,6 @@
                             bannedBy: currentUser
                         });
 
-                        await logActivity('BAN_USER', { targetEmail: targetEmail, bannedBy: currentUser });
-
                         setAdminOutput(`✅ Đã ban ${targetEmail} thành công!`);
 
                     } else if (command === '/unban') {
@@ -779,8 +777,6 @@
                             unbannedAt: firebase.firestore.FieldValue.serverTimestamp(),
                             unbannedBy: currentUser
                         });
-
-                        await logActivity('UNBAN_USER', { targetEmail: targetEmail, unbannedBy: currentUser });
 
                         setAdminOutput(`✅ Đã unban ${targetEmail} thành công!`);
 
@@ -835,13 +831,6 @@
                             adminGiven: true
                         });
 
-                        await logActivity('ADMIN_GIVE_FISH', { 
-                            fishName: fishName, 
-                            targetEmail: targetEmail, 
-                            weight: weight, 
-                            price: fishPrice 
-                        });
-
                         setAdminOutput(`✅ Đã tặng "${fishName}" (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
                 
                     } else if (command === '/givemoney') {
@@ -870,11 +859,6 @@
                         const newMoney = (userData.money || 0) + amount;
 
                         await db.collection('users').doc(targetUserId).update({ money: newMoney });
-
-                        await logActivity('ADMIN_GIVE_MONEY', { 
-                            amount: amount, 
-                            targetEmail: targetEmail 
-                        });
 
                         setAdminOutput(`✅ Đã tặng ${amount} xu cho ${targetEmail}`);
 
@@ -906,11 +890,6 @@
                         if (!ownedRods.includes(rodType)) {
                             ownedRods.push(rodType);
                             await db.collection('users').doc(targetUserId).update({ ownedRods });
-
-                            await logActivity('ADMIN_GIVE_ROD', { 
-                                rodType: rodType, 
-                                targetEmail: targetEmail 
-                            });
 
                             setAdminOutput(`✅ Đã tặng cần câu ${rodType} cho ${targetEmail}`);
                         } else {
@@ -2727,4 +2706,5 @@
     </script>
 </body>
 </html>
+
 
