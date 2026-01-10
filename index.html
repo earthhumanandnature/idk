@@ -692,7 +692,6 @@
 
                         const fishName = parts.slice(1, -1).join(' ');
                         const targetEmail = parts[parts.length - 1];
-
                         const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
                         
                         if (usersSnapshot.empty) {
@@ -701,31 +700,45 @@
                         }
 
                         const targetUserId = usersSnapshot.docs[0].id;
-
                         let fishRarity = 'Common';
                         let fishColor = '#9CA3AF';
+                        let basePrice = 10;
                         
                         for (const [rarity, names] of Object.entries(fishNames)) {
                             if (names.some(name => name.toLowerCase() === fishName.toLowerCase())) {
                                 fishRarity = rarity;
-                                fishColor = rarities.find(r => r.name === rarity)?.color || '#9CA3AF';
+                                const rarityData = rarities.find(r => r.name === rarity);
+                                fishColor = rarityData?.color || '#9CA3AF';
+                                basePrice = rarityData?.price || 10;
                                 break;
                             }
                         }
 
+                        // ⭐ TÍNH CÂN NẶNG NGẪU NHIÊN GIỐNG KHI CÂU
+                        let weight = 1.0;
+                        let increaseChance = 1.0;
+                        while (Math.random() < increaseChance) {
+                            weight += 0.1;
+                            increaseChance -= 0.001;
+                        }
+                        weight = Math.round(weight * 10) / 10;
+
+                        // ⭐ TÍNH GIÁ THEO CÂN NẶNG
+                        const fishPrice = Math.round(basePrice * weight);
+
                         await db.collection('users').doc(targetUserId).collection('inventory').add({
                             name: fishName,
                             rarity: fishRarity,
-                            weight: 1.0,
-                            price: rarities.find(r => r.name === fishRarity)?.price || 10,
+                            weight: weight,
+                            price: fishPrice,
                             color: fishColor,
                             favourite: false,
                             caughtAt: firebase.firestore.FieldValue.serverTimestamp(),
                             adminGiven: true
                         });
 
-                        setAdminOutput(`✅ Đã tặng "${fishName}" cho ${targetEmail}`);
-                        
+                        setAdminOutput(`✅ Đã tặng "${fishName}" (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
+                
                     } else if (command === '/givemoney') {
                         if (parts.length !== 3) {
                             setAdminOutput('❌ Cú pháp: /givemoney <số xu> <email>');
@@ -2567,6 +2580,7 @@
     </script>
 </body>
 </html>
+
 
 
 
