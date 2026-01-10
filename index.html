@@ -891,13 +891,25 @@
             }, [money]);
 
             // Lắng nghe trạng thái đăng nhập
+            // Lắng nghe trạng thái đăng nhập (FIX BAN)
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged(async (user) => {
                     if (user) {
                         setUserId(user.uid);
                         setCurrentUser(user.email);
+            
+                        // ⭐ KIỂM TRA BAN TRƯỚC KHI LOAD DATA
+                        const gameDoc = await db.collection('users').doc(user.uid).get();
+                        if (gameDoc.exists && gameDoc.data().banned === true) {
+                            setGameState('banned');
+                            return; // DỪNG, KHÔNG LOAD DATA
+                        }
+            
+                        // Không banned → load bình thường
                         await loadGameData(user.uid);
                         setGameState('menu');
+                    } else {
+                        setGameState('login');
                     }
                 });
                 return () => unsubscribe();
@@ -918,11 +930,6 @@
                     const gameDoc = await db.collection('users').doc(uid).get();
                     if (gameDoc.exists) {
                         const data = gameDoc.data();
-                        if (data.banned === true) {
-                            setIsBanned(true);
-                            setGameState('banned'); // Thêm state mới 'banned'
-                            return; // Dừng load nếu banned
-                        }
                         setMoney(data.money || 0);
                         setFishingRod(data.fishingRod || 'normal');
                         setOwnedRods(data.ownedRods || ['normal']);
@@ -1411,47 +1418,50 @@
             };
 
             const deleteAccount = async () => {
-                if (window.confirm('Bạn chắc chắn muốn xóa tài khoản? Hành động này không thể khôi phục!')) {
+                if (window.confirm('Bạn chắc chắn muốn XÓA TÀI KHOẢN vĩnh viễn? Dữ liệu sẽ mất hết!')) {
+                    setLoading(true);
                     try {
                         const user = auth.currentUser;
                         if (user) {
-                            // Xóa subcollections trước (inventory và quests)
+                            // Batch delete inventory
                             const inventoryRef = db.collection('users').doc(user.uid).collection('inventory');
-                            const inventoryDocs = await inventoryRef.get();
-                            const batch = db.batch();
-                            inventoryDocs.docs.forEach(doc => batch.delete(doc.ref));
-                            await batch.commit();
+                            const inventorySnapshot = await inventoryRef.get();
+                            const batch1 = db.batch();
+                            inventorySnapshot.docs.forEach(doc => batch1.delete(doc.ref));
+                            await batch1.commit();
 
+                            // Batch delete quests
                             const questsRef = db.collection('users').doc(user.uid).collection('quests');
-                            const questsDocs = await questsRef.get();
-                            questsDocs.docs.forEach(doc => batch.delete(doc.ref)); // Batch mới nếu cần
-                            await batch.commit();
+                            const questsSnapshot = await questsRef.get();
+                            const batch2 = db.batch();
+                            questsSnapshot.docs.forEach(doc => batch2.delete(doc.ref));
+                            await batch2.commit();
 
-                            // Xóa document user
+                            // Delete user doc
                             await db.collection('users').doc(user.uid).delete();
 
-                            // Xóa auth user
+                            // Delete auth user
                             await user.delete();
-
-                            // Sign out và reset state
-                            await auth.signOut();
-                            setUserId(null);
-                            setCurrentUser(null);
-                            setGameState('login');
-                            alert('Tài khoản đã được xóa thành công!');
+                
+                            alert('✅ Tài khoản đã xóa thành công!');
                         }
+                        // Auto sign out & reset
+                        await auth.signOut();
+                        setGameState('login');
                     } catch (error) {
                         if (error.code === 'auth/requires-recent-login') {
-                            alert('Vui lòng đăng nhập lại để xóa tài khoản!');
+                            alert('⚠️ Vui lòng đăng nhập lại để xóa (refresh trang và login).');
                             await auth.signOut();
                             setGameState('login');
                         } else {
-                            alert('Lỗi khi xóa tài khoản: ' + error.message);
+                            alert('Lỗi: ' + error.message);
                         }
+                    } finally {
+                        setLoading(false);
                     }
                 }
             };
-
+            
             const buyRod = async (item) => {
                 if (money < item.price) {
                     alert('Bạn không đủ tiền để mua cần câu này!');
@@ -1734,14 +1744,14 @@
                         <div className="bg-white rounded-xl shadow-2xl p-12 max-w-md w-full mx-4">
                             <h1 className="text-4xl font-bold text-center mb-6 text-red-600">⚠️ Tài Khoản Bị Ban</h1>
                             <p className="text-lg text-center text-gray-800 mb-8">
-                                Bạn đã bị ban. Vui lòng liên hệ Discord <a href="https://discord.gg/8fHj47BH" target="_blank" className="text-blue-600 underline">https://discord.gg/8fHj47BH</a> để được hỗ trợ hoặc xóa tài khoản qua nút dưới.
+                                Bạn đã bị ban. Vui lòng liên hệ Discord <a href="https://discord.gg/8fHj47BH" target="_blank" className="text-blue-600 underline font-bold">https://discord.gg/8fHj47BH</a> để được hỗ trợ hoặc xóa tài khoản qua nút dưới.
                             </p>
                             <div className="flex gap-4">
                                 <button
                                     onClick={deleteAccount}
-                                    className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                                    className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-bold text-lg"
                                 >
-                                    Xóa tài khoản
+                                    🗑️ Xóa tài khoản
                                 </button>
                                 <button
                                     onClick={handleLogout}
@@ -2685,4 +2695,5 @@
     </script>
 </body>
 </html>
+
 
