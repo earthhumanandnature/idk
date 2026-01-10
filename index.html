@@ -280,83 +280,6 @@
                     };
                 }
 
-                window.devCommand = function(command) {
-                    if (!command.startsWith('/givefish ')) {
-                        console.log('Invalid command');
-                        return;
-                    }
-
-                    const parts = command.split(' ');
-                    if (parts.length !== 3) {
-                        console.log('Usage: /givefish <fishName> <email>');
-                        return;
-                    }
-
-                    const fishName = parts[1];
-                    const targetEmail = parts[2];
-
-                    getLocalIP(async (ip) => {
-                        if (ip !== '2001:ee1:fc03:2ab0:c3b8:580a:2efd:53b0') { // địa chỉ ip v6 Wireless LAN adapter Wi-Fi
-                            console.log('Unauthorized IP: ' + ip);
-                            return;
-                        }
-
-                        try {
-                            const usersRef = db.collection('users');
-                            const snapshot = await usersRef.where('email', '==', targetEmail).get();
-                            if (snapshot.empty) {
-                                console.log('No user found with email: ' + targetEmail);
-                                return;
-                            }
-
-                            let targetUid = null;
-                            snapshot.forEach(doc => {
-                                targetUid = doc.id;
-                            });
-
-                            let rarityName = null;
-                            for (const rarity in fishNames) {
-                                if (fishNames[rarity].includes(fishName)) {
-                                    rarityName = rarity;
-                                    break;
-                                }
-                            }
-
-                            if (!rarityName) {
-                                console.log('Fish not found: ' + fishName);
-                                return;
-                            }
-
-                            const rarity = rarities.find(r => r.name === rarityName);
-
-                            let weight = 1.0;
-                            let increaseChance = 1.0;
-                            while (Math.random() < increaseChance) {
-                                weight += 0.1;
-                                increaseChance -= 0.001;
-                            }
-                            weight = Math.round(weight * 10) / 10;
-
-                            const fishPrice = isNaN(rarity.price) ? 0 : Math.round(rarity.price * weight);
-
-                            await db.collection('users').doc(targetUid).collection('inventory').add({
-                                name: fishName,
-                                rarity: rarityName,
-                                weight: weight,
-                                price: fishPrice,
-                                color: rarity.color,
-                                favourite: false,
-                                caughtAt: firebase.firestore.FieldValue.serverTimestamp()
-                            });
-
-                            console.log(`Fish ${fishName} given to ${targetEmail}`);
-                        } catch (error) {
-                            console.error('Error:', error);
-                        }
-                    });
-                };
-            }, []);
-
             const loadGameData = async (uid) => {
                 try {
                     const gameDoc = await db.collection('users').doc(uid).get();
@@ -1800,6 +1723,7 @@
     </script>
 </body>
 </html>
+
 
 
 
