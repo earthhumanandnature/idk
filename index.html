@@ -8,6 +8,18 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slideUp {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+        }
+    </style>
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -89,6 +101,9 @@
             const [showAdminPanel, setShowAdminPanel] = useState(false);
             const [adminCommand, setAdminCommand] = useState('');
             const [adminOutput, setAdminOutput] = useState('');
+            const [displayMoney, setDisplayMoney] = useState(0);
+            const [moneyChange, setMoneyChange] = useState(0);
+            const [showMoneyChange, setShowMoneyChange] = useState(false);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -99,6 +114,35 @@
                 { name: 'Secret', weight: 1, range: 60, time: 10, color: '#F59E0B', price: 150 },
                 { name: 'Special(admin)', weight: 0, range: 0, time: 0, color: '#FFD700', price: NaN }
             ];
+
+            // Format số tiền
+            const formatMoney = (amount) => {
+                if (amount >= 1000000000) return `${(amount / 1000000000).toFixed(1)}b`;
+                if (amount >= 1000000) return `${(amount / 1000000).toFixed(1)}m`;
+                if (amount >= 1000) return `${(amount / 1000).toFixed(1)}k`;
+                return amount.toString();
+            };
+
+            // Cập nhật tiền với animation
+            const updateMoneyWithAnimation = (newAmount, change) => {
+                // Giới hạn tối đa 1b
+                const limitedAmount = Math.min(newAmount, MAX_MONEY);
+                const actualChange = limitedAmount - money;
+    
+                if (actualChange !== 0) {
+                    setMoneyChange(actualChange);
+                    setShowMoneyChange(true);
+        
+                    setTimeout(() => {
+                        setShowMoneyChange(false);
+                    }, 2000);
+                }
+    
+                setMoney(limitedAmount);
+            };
+
+            // Giới hạn tiền tối đa
+            const MAX_MONEY = 1000000000; // 1 tỷ
 
             const isAdmin = currentUser === 'vvt158214@gmail.com';
 
@@ -384,6 +428,28 @@
                 }
             }, []);
 
+            // Animation số tiền chạy
+            useEffect(() => {
+                if (displayMoney !== money) {
+                    const diff = money - displayMoney;
+                    const step = diff / 20; // Chia thành 20 bước
+        
+                    const interval = setInterval(() => {
+                        setDisplayMoney(prev => {
+                            const next = prev + step;
+                            // Nếu đã gần đến số cuối thì set luôn
+                            if (Math.abs(money - next) < Math.abs(step)) {
+                                clearInterval(interval);
+                                return money;
+                            }
+                            return next;
+                        });
+                    }, 30); // Mỗi 30ms update 1 lần
+        
+                    return () => clearInterval(interval);
+                }
+            }, [money]);
+
             // Lắng nghe trạng thái đăng nhập
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -552,7 +618,7 @@
                     q.id === questId ? { ...q, claimed: true } : q
                 );
     
-                setMoney(newMoney);
+                updateMoneyWithAnimation(newMoney, -item.price);
                 setDailyQuests(newQuests);
     
                 try {
@@ -867,7 +933,7 @@
                     await batch.commit();
 
                     const newMoney = money + totalMoney;
-                    setMoney(newMoney);
+                    updateMoneyWithAnimation(newMoney, -item.price);
                     await db.collection('users').doc(userId).update({ money: newMoney });
         
                     // Cập nhật nhiệm vụ kiếm tiền
@@ -899,7 +965,7 @@
                 const newMoney = money - item.price;
                 const newOwnedRods = [...ownedRods, item.unlocks];
 
-                setMoney(newMoney);
+                updateMoneyWithAnimation(newMoney, -item.price);
                 setOwnedRods(newOwnedRods);
                 
                 await db.collection('users').doc(userId).update({
@@ -927,7 +993,7 @@
                 const newMoney = money - bait.price;
                 const newOwnedBaits = [...ownedBaits, baitType];
 
-                setMoney(newMoney);
+                updateMoneyWithAnimation(newMoney, -item.price);
                 setOwnedBaits(newOwnedBaits);
                 
                 await db.collection('users').doc(userId).update({
@@ -988,8 +1054,23 @@
             if (showAdminPanel) {
                 return (
                     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
+                        {/* Thay thế phần hiển thị money cũ */}
                         <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div 
+                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}
+                                    style={{
+                                        animation: 'slideUp 2s ease-out forwards'
+                                    }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
                         </div>
                         
                         <div className="max-w-4xl mx-auto">
@@ -1073,8 +1154,23 @@
             if (showAdminPanel) {
                 return (
                     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
+                        {/* Thay thế phần hiển thị money cũ */}
                         <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div 
+                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}
+                                    style={{
+                                        animation: 'slideUp 2s ease-out forwards'
+                                    }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
                         </div>
             
                         <div className="max-w-4xl mx-auto">
@@ -1213,8 +1309,23 @@
                       className="min-h-screen bg-cover bg-center p-8"
                       style={{ backgroundImage: "url('inbackpack.png')" }}
                     >
+                        {/* Thay thế phần hiển thị money cũ */}
                         <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div 
+                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}
+                                    style={{
+                                        animation: 'slideUp 2s ease-out forwards'
+                                    }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
                         </div>
                         
                         <div className="max-w-6xl mx-auto">
@@ -1390,8 +1501,23 @@
                       className="min-h-screen bg-cover bg-center p-8"
                       style={{ backgroundImage: "url('inshop.png')" }}
                     >
+                        {/* Thay thế phần hiển thị money cũ */}
                         <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div 
+                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}
+                                    style={{
+                                        animation: 'slideUp 2s ease-out forwards'
+                                    }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
                         </div>
                         
                         <div className="max-w-6xl mx-auto">
@@ -1547,8 +1673,23 @@
                       className="min-h-screen bg-cover bg-center p-8"
                       style={{ backgroundImage: "url('inleaderboard.jpg')" }}
                     >
+                        {/* Thay thế phần hiển thị money cũ */}
                         <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div 
+                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}
+                                    style={{
+                                        animation: 'slideUp 2s ease-out forwards'
+                                    }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
                         </div>
             
                         <div className="max-w-4xl mx-auto">
@@ -1663,8 +1804,23 @@
                       className="min-h-screen bg-cover bg-center p-8"
                       style={{ backgroundImage: "url('inquest.png')" }}
                     >
+                        {/* Thay thế phần hiển thị money cũ */}
                         <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div 
+                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}
+                                    style={{
+                                        animation: 'slideUp 2s ease-out forwards'
+                                    }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
                         </div>
             
                         <div className="max-w-4xl mx-auto">
@@ -1800,8 +1956,23 @@
                         </button>
                     </div>
 
+                    {/* Thay thế phần hiển thị money cũ */}
                     <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                        <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                        <p className="text-2xl font-bold text-gray-800">
+                            💰 {formatMoney(Math.floor(displayMoney))} xu
+                        </p>
+                        {showMoneyChange && (
+                            <div 
+                                className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                    moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                }`}
+                                style={{
+                                    animation: 'slideUp 2s ease-out forwards'
+                                }}
+                            >
+                                {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                            </div>
+                        )}
                     </div>
                     
                     {message && gameState === 'menu' && (
@@ -1986,6 +2157,7 @@
     </script>
 </body>
 </html>
+
 
 
 
