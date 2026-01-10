@@ -47,6 +47,72 @@
         .music-disc.playing {
             animation-play-state: running;
         }
+        
+        /* Music Player Styles */
+        .music-player {
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            background: linear-gradient(to bottom right, #9333ea, #ec4899);
+            border-radius: 12px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            padding: 16px;
+            z-index: 1000;
+            color: white;
+            transition: all 0.3s;
+        }
+        
+        .music-player.collapsed {
+            width: 64px;
+            height: 64px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .music-player.expanded {
+            width: 384px;
+        }
+        
+        .music-player input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        .music-player input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .music-player input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .music-player button {
+            transition: all 0.2s;
+        }
+        
+        .music-player button:hover {
+            transform: scale(1.05);
+        }
     </style>
     
     <!-- Firebase SDK -->
@@ -55,7 +121,304 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
+
+    <div id="musicPlayer" class="music-player collapsed" style="display: none;">
+        <div id="collapsedView" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 32px;">
+            🎵
+        </div>
+        <div id="expandedView" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-weight: bold; font-size: 18px;">🎵 Music Player</h3>
+                <button id="collapseBtn" style="color: white; background: none; border: none; cursor: pointer; font-size: 16px;">▼</button>
+            </div>
+            
+            <div style="display: flex; justify-content: center; margin-bottom: 16px;">
+                <div id="musicDisc" class="music-disc" style="width: 128px; height: 128px; border-radius: 50%; background: linear-gradient(to bottom right, #fbbf24, #ec4899); display: flex; align-items: center; justify-content: center; border: 4px solid white; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: #1f2937;"></div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-bottom: 16px;">
+                <p id="trackName" style="font-weight: bold;">No Music</p>
+                <p id="trackInfo" style="font-size: 14px; opacity: 0.8;">Track 0 / 0</p>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+                <input type="range" id="progressBar" min="0" max="100" value="0" style="width: 100%;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 4px;">
+                    <span id="currentTime">0:00</span>
+                    <span id="totalTime">0:00</span>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin-bottom: 16px;">
+                <button id="prevBtn" style="background: rgba(255,255,255,0.2); border: none; border-radius: 50%; padding: 8px; cursor: pointer; font-size: 20px;">⏮️</button>
+                <button id="playBtn" style="background: white; color: #9333ea; border: none; border-radius: 50%; padding: 12px; cursor: pointer; font-size: 24px;">▶️</button>
+                <button id="nextBtn" style="background: rgba(255,255,255,0.2); border: none; border-radius: 50%; padding: 8px; cursor: pointer; font-size: 20px;">⏭️</button>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 14px;">🔊</span>
+                    <input type="range" id="volumeBar" min="0" max="100" value="50" style="flex: 1;">
+                    <span id="volumeText" style="font-size: 14px; width: 40px;">50%</span>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 14px;">⚡</span>
+                    <input type="range" id="speedBar" min="50" max="200" value="100" step="25" style="flex: 1;">
+                    <span id="speedText" style="font-size: 14px; width: 40px;">1x</span>
+                </div>
+            </div>
+            
+            <div style="display: flex; justify-content: center;">
+                <button id="loopBtn" style="padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; background: white; color: #9333ea;">
+                    🔄 Loop ON
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <audio id="audioElement" preload="metadata"></audio>
+    
     <div id="root"></div>
+
+    <script>
+        (function() {
+            // Music Player Variables
+            let playlist = [];
+            let currentTrackIndex = 0;
+            let isPlaying = false;
+            let loop = true;
+            
+            const audio = document.getElementById('audioElement');
+            const musicPlayer = document.getElementById('musicPlayer');
+            const collapsedView = document.getElementById('collapsedView');
+            const expandedView = document.getElementById('expandedView');
+            const musicDisc = document.getElementById('musicDisc');
+            const playBtn = document.getElementById('playBtn');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const loopBtn = document.getElementById('loopBtn');
+            const collapseBtn = document.getElementById('collapseBtn');
+            const progressBar = document.getElementById('progressBar');
+            const volumeBar = document.getElementById('volumeBar');
+            const speedBar = document.getElementById('speedBar');
+            const currentTimeEl = document.getElementById('currentTime');
+            const totalTimeEl = document.getElementById('totalTime');
+            const volumeText = document.getElementById('volumeText');
+            const speedText = document.getElementById('speedText');
+            const trackName = document.getElementById('trackName');
+            const trackInfo = document.getElementById('trackInfo');
+            
+            // Format time helper
+            function formatTime(seconds) {
+                if (isNaN(seconds)) return '0:00';
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return mins + ':' + (secs < 10 ? '0' : '') + secs;
+            }
+            
+            // Check available music files
+            async function checkMusicFiles() {
+                const available = [];
+                for (let i = 1; i <= 10; i++) {
+                    const filename = 'music' + i + '.mp3';
+                    try {
+                        const response = await fetch(filename, { method: 'HEAD' });
+                        if (response.ok) {
+                            available.push({
+                                id: i,
+                                name: 'Music ' + i,
+                                src: filename
+                            });
+                        }
+                    } catch (error) {
+                        // File doesn't exist, skip
+                    }
+                }
+                return available;
+            }
+            
+            // Initialize player
+            async function initPlayer() {
+                playlist = await checkMusicFiles();
+                
+                if (playlist.length > 0) {
+                    musicPlayer.style.display = 'block';
+                    loadTrack(0);
+                    updateUI();
+                    
+                    // Auto expand
+                    setTimeout(toggleExpand, 500);
+                    
+                    // Auto play after 1 second
+                    setTimeout(() => {
+                        togglePlay();
+                    }, 1000);
+                }
+            }
+            
+            // Load track
+            function loadTrack(index) {
+                if (index < 0 || index >= playlist.length) return;
+                currentTrackIndex = index;
+                audio.src = playlist[index].src;
+                updateUI();
+            }
+            
+            // Update UI
+            function updateUI() {
+                if (playlist.length > 0) {
+                    trackName.textContent = playlist[currentTrackIndex].name;
+                    trackInfo.textContent = 'Track ' + (currentTrackIndex + 1) + ' / ' + playlist.length;
+                }
+                
+                playBtn.textContent = isPlaying ? '⏸️' : '▶️';
+                
+                if (isPlaying) {
+                    musicDisc.classList.add('playing');
+                } else {
+                    musicDisc.classList.remove('playing');
+                }
+                
+                loopBtn.textContent = loop ? '🔄 Loop ON' : '🔄 Loop OFF';
+                loopBtn.style.background = loop ? 'white' : 'rgba(255,255,255,0.2)';
+                loopBtn.style.color = loop ? '#9333ea' : 'white';
+            }
+            
+            // Toggle play/pause
+            function togglePlay() {
+                if (isPlaying) {
+                    audio.pause();
+                    isPlaying = false;
+                } else {
+                    audio.play().catch(e => console.log('Play error:', e));
+                    isPlaying = true;
+                }
+                updateUI();
+            }
+            
+            // Skip to next track
+            function skipNext() {
+                const nextIndex = (currentTrackIndex + 1) % playlist.length;
+                loadTrack(nextIndex);
+                if (isPlaying) {
+                    audio.play();
+                }
+            }
+            
+            // Skip to previous track
+            function skipPrev() {
+                const prevIndex = currentTrackIndex === 0 ? playlist.length - 1 : currentTrackIndex - 1;
+                loadTrack(prevIndex);
+                if (isPlaying) {
+                    audio.play();
+                }
+            }
+            
+            // Toggle loop
+            function toggleLoop() {
+                loop = !loop;
+                updateUI();
+            }
+            
+            // Expand/collapse player
+            function toggleExpand() {
+                if (musicPlayer.classList.contains('collapsed')) {
+                    musicPlayer.classList.remove('collapsed');
+                    musicPlayer.classList.add('expanded');
+                    collapsedView.style.display = 'none';
+                    expandedView.style.display = 'block';
+                } else {
+                    musicPlayer.classList.add('collapsed');
+                    musicPlayer.classList.remove('expanded');
+                    collapsedView.style.display = 'flex';
+                    expandedView.style.display = 'none';
+                }
+            }
+            
+            // Event Listeners
+            playBtn.addEventListener('click', togglePlay);
+            nextBtn.addEventListener('click', skipNext);
+            prevBtn.addEventListener('click', skipPrev);
+            loopBtn.addEventListener('click', toggleLoop);
+            collapseBtn.addEventListener('click', toggleExpand);
+            collapsedView.addEventListener('click', toggleExpand);
+            
+            // Progress bar
+            progressBar.addEventListener('input', function() {
+                const time = (this.value / 100) * audio.duration;
+                audio.currentTime = time;
+            });
+            
+            // Volume bar
+            volumeBar.addEventListener('input', function() {
+                const vol = this.value / 100;
+                audio.volume = vol;
+                volumeText.textContent = this.value + '%';
+            });
+            
+            // Speed bar
+            speedBar.addEventListener('input', function() {
+                const speed = this.value / 100;
+                audio.playbackRate = speed;
+                speedText.textContent = speed + 'x';
+            });
+            
+            // Audio events
+            audio.addEventListener('timeupdate', function() {
+                if (audio.duration) {
+                    const progress = (audio.currentTime / audio.duration) * 100;
+                    progressBar.value = progress;
+                    currentTimeEl.textContent = formatTime(audio.currentTime);
+                }
+            });
+            
+            audio.addEventListener('loadedmetadata', function() {
+                totalTimeEl.textContent = formatTime(audio.duration);
+            });
+            
+            audio.addEventListener('ended', function() {
+                if (loop) {
+                    skipNext();
+                } else {
+                    if (currentTrackIndex === playlist.length - 1) {
+                        isPlaying = false;
+                        updateUI();
+                    } else {
+                        skipNext();
+                    }
+                }
+            });
+            
+            // Initialize on page load
+            let playerInitialized = false;
+            
+            window.addEventListener('load', function() {
+                // Check if Firebase auth is available
+                if (window.firebase && window.firebase.auth) {
+                    window.firebase.auth().onAuthStateChanged(function(user) {
+                        if (user && !playerInitialized) {
+                            // User is logged in, initialize music player
+                            playerInitialized = true;
+                            initPlayer();
+                        } else if (!user) {
+                            // User is logged out, hide music player
+                            musicPlayer.style.display = 'none';
+                            if (isPlaying) {
+                                audio.pause();
+                                isPlaying = false;
+                                updateUI();
+                            }
+                        }
+                    });
+                }
+            });
+        })();
+    </script>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
@@ -2459,6 +2822,7 @@
     </script>
 </body>
 </html>
+
 
 
 
