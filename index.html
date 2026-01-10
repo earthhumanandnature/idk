@@ -86,6 +86,9 @@
             const [dailyQuests, setDailyQuests] = useState([]);
             const [showQuests, setShowQuests] = useState(false);
             const [lastQuestReset, setLastQuestReset] = useState(null);
+            const [showAdminPanel, setShowAdminPanel] = useState(false);
+            const [adminCommand, setAdminCommand] = useState('');
+            const [adminOutput, setAdminOutput] = useState('');
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -1066,6 +1069,68 @@
                 );
             }
 
+            // Admin Panel UI
+            if (showAdminPanel) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">💰 {money} xu</p>
+                        </div>
+            
+                        <div className="max-w-4xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h2 className="text-3xl font-bold text-gray-800">⚙️ Admin Command Panel</h2>
+                                        <p className="text-sm text-gray-600 mt-1">Quyền Admin: {currentUser}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowAdminPanel(false)}
+                                        className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+                                    <h3 className="font-bold mb-2">📋 Danh sách lệnh:</h3>
+                                    <div className="text-sm text-gray-700 space-y-1">
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/givefish &lt;tên cá&gt; &lt;email&gt;</code> - Tặng cá cho người chơi</p>
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/givemoney &lt;số xu&gt; &lt;email&gt;</code> - Tặng xu cho người chơi</p>
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/giverod &lt;legendary|mythic|secret&gt; &lt;email&gt;</code> - Tặng cần câu</p>
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/help</code> - Hiển thị trợ giúp</p>
+                                    </div>
+                                </div>
+
+                                <div className="mb-4">
+                                    <input
+                                        type="text"
+                                        value={adminCommand}
+                                        onChange={(e) => setAdminCommand(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && executeAdminCommand()}
+                                        placeholder="Nhập lệnh... (ví dụ: /givefish Cá Rồng test@gmail.com)"
+                                        className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={executeAdminCommand}
+                                    className="w-full py-3 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition mb-4"
+                                >
+                                    ▶️ Thực thi lệnh
+                                </button>
+
+                                {adminOutput && (
+                                    <div className="p-4 bg-gray-900 text-green-400 rounded-lg font-mono text-sm whitespace-pre-wrap">
+                                        {adminOutput}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             if (gameState === 'login') {
                 return (
                     <div
@@ -1724,6 +1789,9 @@
                 >
                     <div className="fixed top-4 left-4 bg-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3">
                         <span className="text-lg">👤 <strong>{currentUser}</strong></span>
+                        {isAdmin && (
+                            <span className="bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">ADMIN</span>
+                        )}
                         <button
                             onClick={handleLogout}
                             className="bg-red-500 text-white px-4 py-1 rounded-md text-sm hover:bg-red-600 transition"
@@ -1918,6 +1986,7 @@
     </script>
 </body>
 </html>
+
 
 
 
