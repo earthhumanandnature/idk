@@ -1094,7 +1094,6 @@
                         // ⭐ KIỂM TRA BAN TRƯỚC KHI LOAD DATA
                         const gameDoc = await db.collection('users').doc(user.uid).get();
                         if (gameDoc.exists && gameDoc.data().banned === true) {
-                            auth.signOut();  // ⭐ Thêm: Force signOut nếu banned
                             setGameState('banned');
                             return; // DỪNG, KHÔNG LOAD DATA
                         }
@@ -1102,13 +1101,7 @@
                         // Không load data nữa, listener sẽ handle
                         setGameState('menu');
                     } else {
-                        // ⭐⭐⭐ THÊM CHECK LOCALSTORAGE CHO BANNED SAU SIGNOUT ⭐⭐⭐
-                        if (localStorage.getItem('banned') === 'true') {
-                            setGameState('banned');
-                            localStorage.removeItem('banned');
-                        } else {
-                            setGameState('login');
-                        }
+                        setGameState('login');
                     }            
                 });
                 return () => unsubscribe();
@@ -1144,15 +1137,12 @@
 
                         // ⭐⭐⭐ LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
                         if (data.banned === true) {
-                            // ⭐⭐⭐ LƯU BANNED VÀO LOCALSTORAGE TRƯỚC SIGNOUT ⭐⭐⭐
-                            localStorage.setItem('banned', 'true');
-                            auth.signOut(); // Force logout để tránh access tiếp
+                            // User bị ban → chuyển ngay sang trang banned (KHÔNG SIGNOUT)
                             setGameState('banned');
                         } else if (gameState === 'banned') {
-                            // User được unban → quay lại menu (và load data realtime)
+                            // User được unban → quay lại menu REALTIME (và load data)
                             setGameState('menu');
-                            // Optional: Load lại data nếu cần (nhưng listener đã tự update)
-                            // loadGameData(userId); // Nếu muốn reload toàn bộ
+                            loadGameData(userId); // Reload data để đồng bộ sau unban
                         }
                     }
                 });
@@ -3400,6 +3390,7 @@
     </script>
 </body>
 </html>
+
 
 
 
