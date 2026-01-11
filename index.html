@@ -1494,7 +1494,9 @@
                         favourite: false
                     });
                     
-                    setTimeLeft(rarity.time);
+                    const tribeData = tribes[tribe] || tribes['nguoi'];
+                    const baseTime = rarity.time * (1 + tribeData.timeBonus / 100);
+                    setTimeLeft(Math.ceil(baseTime));  // Làm tròn lên (1.9 → 2, 2.5 → 3)
                     const tribeData = tribes[tribe] || tribes['nguoi'];
                     setTimeLeft(rarity.time * (1 + tribeData.timeBonus / 100));
                     setGameState('question');
@@ -2544,6 +2546,9 @@
                                 {shopTab === 'rods' ? (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {shopItems.map((item) => {
+                                            const tribeData = tribes[tribe] || tribes['nguoi'];
+                                            const discount = tribeData.shopDiscount / 100;
+                                            const effectivePrice = Math.round(item.price * (1 - discount));
                                             const isOwned = ownedRods.includes(item.unlocks);
             
                                             return (
@@ -2568,14 +2573,14 @@
                                                         {item.description}
                                                     </p>
                                                     <p className="text-3xl font-bold text-yellow-600 mb-4">
-                                                        💰 {item.price} xu
+                                                        💰 {effectivePrice} xu {discount > 0 && `(giảm ${tribeData.shopDiscount}%)`}
                                                     </p>
                                                     <button
                                                         onClick={() => buyRod(item)}
-                                                        disabled={isOwned || money < item.price}
+                                                        disabled={isOwned || money < effectivePrice}
                                                         className={`w-full py-3 text-white text-lg font-bold rounded-lg transition ${item.color} disabled:bg-gray-400 disabled:cursor-not-allowed`}
                                                     >
-                                                        {isOwned ? 'Đã sở hữu' : money < item.price ? 'Không đủ tiền' : 'Mua ngay'}
+                                                        {isOwned ? 'Đã sở hữu' : money < effectivePrice ? 'Không đủ tiền' : 'Mua ngay'}
                                                     </button>
                                                 </div>
                                             );
@@ -2584,6 +2589,9 @@
                                 ) : shopTab === 'baits' ? (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {Object.entries(baitInfo).filter(([key]) => key !== 'normal').map(([baitType, bait]) => {
+                                            const tribeData = tribes[tribe] || tribes['nguoi'];
+                                            const discount = tribeData.shopDiscount / 100;
+                                            const effectivePrice = Math.round(bait.price * (1 - discount));
                                             const isOwned = ownedBaits.includes(baitType);
             
                                             return (
@@ -2620,14 +2628,14 @@
                                                         </div>
                                                     </div>
                                                     <p className="text-3xl font-bold text-yellow-600 mb-4">
-                                                        💰 {bait.price} xu
+                                                        💰 {effectivePrice} xu {discount > 0 && `(giảm ${tribeData.shopDiscount}%)`}
                                                     </p>
                                                     <button
                                                         onClick={() => buyBait(baitType)}
-                                                        disabled={isOwned || money < bait.price}
+                                                        disabled={isOwned || money < effectivePrice}
                                                         className="w-full py-3 text-white text-lg font-bold rounded-lg transition bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                                                     >
-                                                        {isOwned ? 'Đã sở hữu' : money < bait.price ? 'Không đủ tiền' : 'Mua ngay'}
+                                                        {isOwned ? 'Đã sở hữu' : money < effectivePrice ? 'Không đủ tiền' : 'Mua ngay'}
                                                     </button>
                                                 </div>
                                             );
@@ -3195,4 +3203,5 @@
     </script>
 </body>
 </html>
+
 
