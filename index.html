@@ -1798,47 +1798,44 @@
             };
 
             const deleteAccount = async () => {
-                if (window.confirm('Bạn chắc chắn muốn XÓA TÀI KHOẢN vĩnh viễn? Dữ liệu sẽ mất hết!')) {
-                    setLoading(true);
-                    try {
-                        const user = auth.currentUser;
-                        if (user) {
-                            // Batch delete inventory
-                            const inventoryRef = db.collection('users').doc(user.uid).collection('inventory');
-                            const inventorySnapshot = await inventoryRef.get();
-                            const batch1 = db.batch();
-                            inventorySnapshot.docs.forEach(doc => batch1.delete(doc.ref));
-                            await batch1.commit();
-
-                            // Batch delete quests
-                            const questsRef = db.collection('users').doc(user.uid).collection('quests');
-                            const questsSnapshot = await questsRef.get();
-                            const batch2 = db.batch();
-                            questsSnapshot.docs.forEach(doc => batch2.delete(doc.ref));
-                            await batch2.commit();
-
-                            // Delete user doc
-                            await db.collection('users').doc(user.uid).delete();
-
-                            // Delete auth user
-                            await user.delete();
-                
-                            alert('✅ Tài khoản đã xóa thành công!');
-                        }
-                        // Auto sign out & reset
+                if (!window.confirm('Bạn chắc chắn muốn xóa tài khoản vĩnh viễn? Tất cả dữ liệu sẽ mất!')) return;
+    
+                try {
+                    // Xóa subcollections trước (inventory và quests)
+                    const inventoryRef = db.collection('users').doc(userId).collection('inventory');
+                    const questsRef = db.collection('users').doc(userId).collection('quests');
+                    
+                    // Xóa tất cả docs trong inventory
+                    const inventoryDocs = await inventoryRef.get();
+                    for (const doc of inventoryDocs.docs) {
+                        await doc.ref.delete();
+                    }
+        
+                    // Xóa tất cả docs trong quests (thường chỉ có 'daily', nhưng an toàn)
+                    const questsDocs = await questsRef.get();
+                    for (const doc of questsDocs.docs) {
+                        await doc.ref.delete();
+                    }
+        
+                    // Xóa user doc chính
+                    await db.collection('users').doc(userId).delete();
+        
+                    // Xóa Firebase Auth user
+                    await auth.currentUser.delete();
+        
+                    // Sign out và quay về login
+                    await auth.signOut();
+                    setGameState('login');
+                    alert('Tài khoản đã xóa vĩnh viễn!');
+                } catch (error) {
+                    console.error('Delete error:', error);
+                    if (error.code === 'auth/requires-recent-login') {
+                        alert('Vui lòng đăng nhập lại để xóa tài khoản!');
                         await auth.signOut();
                         setGameState('login');
-                    } catch (error) {
-                        if (error.code === 'auth/requires-recent-login') {
-                            alert('⚠️ Vui lòng đăng nhập lại để xóa (refresh trang và login).');
-                            await auth.signOut();
-                            setGameState('login');
-                        } else {
-                            alert('Lỗi: ' + error.message);
-                        }
-                    } finally {
-                        setLoading(false);
-                    }
+                    } else {
+                        alert('Lỗi khi xóa: ' + error.message);
+                    }            
                 }
             };
             
@@ -2348,26 +2345,16 @@
 
             if (gameState === 'banned') {
                 return (
-                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-600 to-red-800 p-8">
-                        <div className="bg-white rounded-xl shadow-2xl p-12 max-w-md w-full mx-4">
-                            <h1 className="text-4xl font-bold text-center mb-6 text-red-600">⚠️ Tài Khoản Bị Ban</h1>
-                            <p className="text-lg text-center text-gray-800 mb-8">
-                                Bạn đã bị ban. Vui lòng liên hệ Discord <a href="https://discord.gg/8fHj47BH" target="_blank" className="text-blue-600 underline font-bold">https://discord.gg/8fHj47BH</a> để được hỗ trợ hoặc xóa tài khoản qua nút dưới.
-                            </p>
-                            <div className="flex gap-4">
-                                <button
-                                    onClick={deleteAccount}
-                                    className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-bold text-lg"
-                                >
-                                    🗑️ Xóa tài khoản
-                                </button>
-                                <button
-                                    onClick={handleLogout}
-                                    className="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition"
-                                >
-                                    Đăng xuất
-                                </button>
-                            </div>
+                    <div className="min-h-screen flex items-center justify-center bg-red-900">
+                        <div className="bg-white rounded-lg p-12 shadow-2xl text-center">
+                            <h2 className="text-4xl font-bold text-red-600 mb-4">Tài khoản bị cấm!</h2>
+                            <p className="text-xl text-gray-800 mb-8">Bạn đã bị ban khỏi game.</p>
+                            <button
+                                onClick={deleteAccount}
+                                className="px-8 py-3 bg-red-600 text-white text-xl rounded-lg hover:bg-red-700 transition"
+                            >
+                                Xóa tài khoản vĩnh viễn
+                            </button>
                         </div>
                     </div>
                 );
@@ -3379,6 +3366,7 @@
     </script>
 </body>
 </html>
+
 
 
 
