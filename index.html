@@ -1102,7 +1102,13 @@
                         // Không load data nữa, listener sẽ handle
                         setGameState('menu');
                     } else {
-                        setGameState('login');
+                        // ⭐⭐⭐ THÊM CHECK LOCALSTORAGE CHO BANNED SAU SIGNOUT ⭐⭐⭐
+                        if (localStorage.getItem('banned') === 'true') {
+                            setGameState('banned');
+                            localStorage.removeItem('banned');
+                        } else {
+                            setGameState('login');
+                        }
                     }            
                 });
                 return () => unsubscribe();
@@ -1138,7 +1144,8 @@
 
                         // ⭐⭐⭐ LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
                         if (data.banned === true) {
-                            // User bị ban → signOut và chuyển ngay sang trang banned
+                            // ⭐⭐⭐ LƯU BANNED VÀO LOCALSTORAGE TRƯỚC SIGNOUT ⭐⭐⭐
+                            localStorage.setItem('banned', 'true');
                             auth.signOut(); // Force logout để tránh access tiếp
                             setGameState('banned');
                         } else if (gameState === 'banned') {
@@ -3393,6 +3400,7 @@
     </script>
 </body>
 </html>
+
 
 
 
