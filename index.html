@@ -1086,41 +1086,26 @@
             // Lắng nghe trạng thái đăng nhập
             // Lắng nghe trạng thái đăng nhập (FIX BAN)
             useEffect(() => {
-                if (!userId) return;  // Skip nếu userId chưa set
-
-                // Listener cho user document (money, rods, baits, tribe, etc.)
-                const unsubscribeUser = db.collection('users').doc(userId).onSnapshot((doc) => {
-                    if (doc.exists) {
-                        const data = doc.data();
-   
-                        // Kiểm tra ban trước tiên
-                        if (data.banned === true) {
-                            auth.signOut(); // Sign out ngay
-                            setGameState('banned'); // Chuyển state
-                            return; // Dừng, không update state khác
+                const unsubscribe = auth.onAuthStateChanged(async (user) => {
+                    if (user) {
+                        setUserId(user.uid);
+                        setCurrentUser(user.email);
+    
+                        // ⭐ KIỂM TRA BAN TRƯỚC KHI LOAD DATA
+                        const gameDoc = await db.collection('users').doc(user.uid).get();
+                        if (gameDoc.exists && gameDoc.data().banned === true) {
+                            setGameState('banned');
+                            return; // DỪNG, KHÔNG LOAD DATA
                         }
-   
-                        // Update state bình thường nếu không ban
-                        setMoney(data.money || 0);
-                        setDisplayMoney(data.money || 0);
-                        setFishingRod(data.fishingRod || 'normal');
-                        setOwnedRods(data.ownedRods || ['normal']);
-                        setCurrentBait(data.currentBait || 'normal');
-                        setOwnedBaits(data.ownedBaits || ['normal']);
-                        setTribe(data.tribe || 'nguoi');
-                        setRollCount(data.rollCount || 0);
-                        setPurchasedRollPacks(data.purchasedRollPacks || { single: 0, five: 0, ten: 0 });
-                        setFishingOnlySecret(data.fishingOnlySecret || false);
-                        setIsBanned(data.banned || false);
+    
+                        // Không load data nữa, listener sẽ handle
+                        setGameState('menu');
                     } else {
-                        // Nếu doc không tồn tại (xóa), signOut
-                        auth.signOut();
                         setGameState('login');
                     }            
                 });
-    
-                return () => unsubscribeUser();
-            }, [userId]);
+                return () => unsubscribe();
+            }, []);
             // Auto-save game data
             useEffect(() => {
                 if (userId && gameState === 'menu') {
@@ -3395,6 +3380,7 @@
     </script>
 </body>
 </html>
+
 
 
 
