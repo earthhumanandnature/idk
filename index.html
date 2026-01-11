@@ -500,6 +500,11 @@
             const [showLogs, setShowLogs] = useState(false);
             const [logsData, setLogsData] = useState([]);
             const [loadingLogs, setLoadingLogs] = useState(false);
+            // ⭐ THÊM STATE CHO TỘC & ROLL
+            const [tribe, setTribe] = useState('nguoi'); // Key tribe mặc định
+            const [rollCount, setRollCount] = useState(3); // Lần roll miễn phí
+            const [purchasedRollPacks, setPurchasedRollPacks] = useState({ single: 0, five: 0, ten: 0 }); // Theo dõi mua gói
+            const [showRollPanel, setShowRollPanel] = useState(false); // Panel roll tộc
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -603,6 +608,38 @@
                 }
             };
 
+            // ⭐ ĐỊNH NGHĨA TỘC & BUFF
+            const tribes = {
+                'nguoi': {
+                    name: 'Người',
+                    probability: 50,
+                    timeBonus: 0,      // % tăng thời gian câu
+                    diffReduce: 0,     // % giảm độ khó
+                    shopDiscount: 0    // % giảm giá shop
+                },
+                'ca': {
+                    name: 'Cá',
+                    probability: 30,
+                    timeBonus: 30,
+                    diffReduce: 15,
+                    shopDiscount: 0
+                },
+                'nemo': {
+                    name: 'Nemo',
+                    probability: 15,
+                    timeBonus: 5,
+                    diffReduce: 0,
+                    shopDiscount: 15
+                },
+                'poseidon': {
+                    name: 'Poseidon',
+                    probability: 1,
+                    timeBonus: 30,
+                    diffReduce: 50,
+                    shopDiscount: 30
+                }
+            };
+
             // Cấu hình nhiệm vụ hằng ngày
             const dailyQuestTemplates = [
                 {
@@ -676,6 +713,34 @@
                     price: 700,
                     color: 'bg-gray-900 hover:bg-gray-800',
                     unlocks: 'secret'
+                }
+            ];
+
+            // ⭐ ITEMS MUA ROLL TRONG SHOP
+            const rollItems = [
+                {
+                    id: 'roll_single',
+                    name: '1 Lần Roll Tộc',
+                    description: 'Mua thêm 1 lần roll tộc',
+                    basePrice: 2000,
+                    rolls: 1,
+                    packType: 'single'
+                },
+                {
+                    id: 'roll_five',
+                    name: '5 Lần Roll Tộc',
+                    description: 'Mua thêm 5 lần roll tộc',
+                    basePrice: 8000,
+                    rolls: 5,
+                    packType: 'five'
+                },
+                {
+                    id: 'roll_ten',
+                    name: '10 Lần Roll Tộc',
+                    description: 'Mua thêm 10 lần roll tộc',
+                    basePrice: 15000,
+                    rolls: 10,
+                    packType: 'ten'
                 }
             ];
 
@@ -953,6 +1018,9 @@
                         setOwnedRods(data.ownedRods || ['normal']);
                         setCurrentBait(data.currentBait || 'normal');
                         setOwnedBaits(data.ownedBaits || ['normal']);
+                        setTribe(data.tribe || 'nguoi');
+                        setRollCount(data.rollCount || 0);
+                        setPurchasedRollPacks(data.purchasedRollPacks || { single: 0, five: 0, ten: 0 });
                     }
 
                     const inventorySnapshot = await db.collection('users').doc(uid).collection('inventory').get();
@@ -1280,7 +1348,10 @@
                 try {
                     const userCredential = await auth.createUserWithEmailAndPassword(email, password);
                     const user = userCredential.user;
-                    
+        
+                    // ⭐ ROLL TỘC ĐẦU TIÊN & SET ROLL COUNT
+                    const initialTribe = rollTribe();
+
                     await db.collection('users').doc(user.uid).set({
                         email: user.email,
                         money: 0,
@@ -1289,6 +1360,9 @@
                         currentBait: 'normal',
                         ownedBaits: ['normal'],
                         banned: false,
+                        tribe: initialTribe,
+                        rollCount: 3,  // 3 lần miễn phí
+                        purchasedRollPacks: { single: 0, five: 0, ten: 0 },
                         createdAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
 
@@ -1383,7 +1457,9 @@
 
             const generateMath = (range, rarity) => {
                 const difficultyReduction = baitInfo[currentBait].difficulty[rarity] || 0;
-                const adjustedRange = Math.max(5, Math.round(range * (1 - difficultyReduction / 100)));
+                const tribeData = tribes[tribe] || tribes['nguoi'];
+                const tribeDiffReduce = tribeData.diffReduce;
+                const adjustedRange = Math.max(5, Math.round(range * (1 - (difficultyReduction + tribeDiffReduce) / 100)));
                 
                 const operations = ['+', '-'];
                 const op = operations[Math.floor(Math.random() * operations.length)];
@@ -1419,6 +1495,8 @@
                     });
                     
                     setTimeLeft(rarity.time);
+                    const tribeData = tribes[tribe] || tribes['nguoi'];
+                    setTimeLeft(rarity.time * (1 + tribeData.timeBonus / 100));
                     setGameState('question');
                 }, 1500);
             };
@@ -1601,7 +1679,11 @@
             };
             
             const buyRod = async (item) => {
-                if (money < item.price) {
+                const tribeData = tribes[tribe] || tribes['nguoi'];
+                const discount = tribeData.shopDiscount / 100;
+                const effectivePrice = Math.round(item.price * (1 - discount));
+
+                if (money < effectivePrice) {
                     alert('Bạn không đủ tiền để mua cần câu này!');
                     return;
                 }
@@ -1611,19 +1693,19 @@
                     return;
                 }
 
-                const newMoney = money - item.price;
+                const newMoney = money - effectivePrice;
                 const newOwnedRods = [...ownedRods, item.unlocks];
 
-                updateMoneyWithAnimation(newMoney, -item.price);
+                updateMoneyWithAnimation(newMoney, -effectivePrice);
                 setOwnedRods(newOwnedRods);
-                
+    
                 await db.collection('users').doc(userId).update({
                     money: newMoney,
                     ownedRods: newOwnedRods
                 });
 
-                // ⭐ THÊM LOG MUA CẦN
-                saveLog('buy_rod', { rod: item.name, price: item.price }, -item.price);
+                // ⭐ THÊM LOG MUA ROD
+                saveLog('buy_rod', { rod: item.name, price: effectivePrice }, -effectivePrice);
 
                 setMessage(`✅ Đã mua ${item.name} thành công! Vào Balo để trang bị.`);
                 setTimeout(() => setMessage(''), 3000);
@@ -1631,8 +1713,11 @@
 
             const buyBait = async (baitType) => {
                 const bait = baitInfo[baitType];
-                
-                if (money < bait.price) {
+                const tribeData = tribes[tribe] || tribes['nguoi'];
+                const discount = tribeData.shopDiscount / 100;
+                const effectivePrice = Math.round(bait.price * (1 - discount));
+
+                if (money < effectivePrice) {
                     alert('Bạn không đủ tiền để mua mồi này!');
                     return;
                 }
@@ -1642,22 +1727,84 @@
                     return;
                 }
 
-                const newMoney = money - bait.price;
+                const newMoney = money - effectivePrice;
                 const newOwnedBaits = [...ownedBaits, baitType];
 
-                updateMoneyWithAnimation(newMoney, -bait.price);
+                updateMoneyWithAnimation(newMoney, -effectivePrice);
                 setOwnedBaits(newOwnedBaits);
-                
+    
                 await db.collection('users').doc(userId).update({
                     money: newMoney,
                     ownedBaits: newOwnedBaits
                 });
 
                 // ⭐ THÊM LOG MUA MỒI
-                saveLog('buy_bait', { bait: bait.name, price: bait.price }, -bait.price);
+                saveLog('buy_bait', { bait: bait.name, price: effectivePrice }, -effectivePrice);
 
                 setMessage(`✅ Đã mua ${bait.name} thành công! Vào Balo để trang bị.`);
                 setTimeout(() => setMessage(''), 3000);
+            };
+
+            // ⭐ MUA GÓI ROLL TỘC
+            const buyRollPack = async (item) => {
+                const tribeData = tribes[tribe] || tribes['nguoi'];
+                const discount = tribeData.shopDiscount / 100;
+                const effectivePrice = Math.round(item.basePrice * (1 - discount));
+
+                if (money < effectivePrice) {
+                    alert('Bạn không đủ tiền để mua gói này!');
+                    return;
+                }
+
+                if (purchasedRollPacks[item.packType] >= 10) {
+                    alert('Bạn đã mua tối đa 10 lần cho gói này!');
+                    return;
+                }
+
+                const newMoney = money - effectivePrice;
+                const newRollCount = rollCount + item.rolls;
+                const newPurchased = { ...purchasedRollPacks, [item.packType]: purchasedRollPacks[item.packType] + 1 };
+
+                updateMoneyWithAnimation(newMoney, -effectivePrice);
+                setRollCount(newRollCount);
+                setPurchasedRollPacks(newPurchased);
+
+                await db.collection('users').doc(userId).update({
+                    money: newMoney,
+                    rollCount: newRollCount,
+                    purchasedRollPacks: newPurchased
+                });
+
+                // ⭐ THÊM LOG MUA ROLL
+                saveLog('buy_roll', { pack: item.name, rolls: item.rolls, price: effectivePrice }, -effectivePrice);
+
+                setMessage(`✅ Đã mua ${item.name} thành công! Bạn có thêm ${item.rolls} lần roll.`);
+                setTimeout(() => setMessage(''), 3000);
+            };
+
+            // ⭐ ROLL LẠI TỘC (DÙNG ROLL COUNT)
+            const performRoll = async () => {
+                if (rollCount <= 0) {
+                    alert('Bạn không còn lần roll nào! Hãy mua thêm ở cửa hàng.');
+                    return;
+                }
+
+                const newTribe = rollTribe();
+                const newRollCount = rollCount - 1;
+
+                setTribe(newTribe);
+                setRollCount(newRollCount);
+
+                await db.collection('users').doc(userId).update({
+                    tribe: newTribe,
+                    rollCount: newRollCount
+                });
+
+                // ⭐ THÊM LOG ROLL TỘC
+                saveLog('roll_tribe', { newTribe: tribes[newTribe].name }, 0);
+
+                alert(`🎲 Bạn đã roll được tộc mới: ${tribes[newTribe].name}! Còn ${newRollCount} lần roll.`);
+                setShowRollPanel(false);
             };
 
             const equipRod = async (rodType) => {
@@ -1703,6 +1850,19 @@
                     case 'secret': return '#1F2937';
                     default: return '#9CA3AF';
                 }
+            };
+
+            // ⭐ HÀM ROLL TỘC NGẪU NHIÊN
+            const rollTribe = () => {
+                const rand = Math.random() * 100;
+                let cumulative = 0;
+                for (const [key, t] of Object.entries(tribes)) {
+                    cumulative += t.probability;
+                    if (rand < cumulative) {
+                        return key;
+                    }
+                }
+                return 'nguoi'; // Default
             };
 
             // Admin Panel UI
@@ -1863,6 +2023,46 @@
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (showRollPanel) {
+                const tribeData = tribes[tribe] || tribes['nguoi'];
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-700 p-8">
+                        <div className="max-w-md mx-auto bg-white rounded-lg shadow-2xl p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="text-3xl font-bold text-gray-800">🎲 Roll Tộc</h2>
+                                <button
+                                    onClick={() => setShowRollPanel(false)}
+                                    className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                                >
+                                    Quay lại
+                                </button>
+                            </div>
+
+                            <div className="p-4 bg-blue-50 rounded-lg mb-6">
+                                <h3 className="text-2xl font-bold mb-2">Tộc hiện tại: {tribeData.name}</h3>
+                                <ul className="list-disc pl-6 text-gray-700">
+                                    <li>Tăng thời gian câu: +{tribeData.timeBonus}%</li>
+                                    <li>Giảm độ khó: -{tribeData.diffReduce}%</li>
+                                    <li>Giảm giá shop: -{tribeData.shopDiscount}%</li>
+                                </ul>
+                            </div>
+
+                            <p className="text-center text-xl mb-4">Bạn còn {rollCount} lần roll miễn phí/mua.</p>
+
+                            <button
+                                onClick={performRoll}
+                                disabled={rollCount <= 0}
+                                className="w-full py-4 bg-green-600 text-white text-2xl font-bold rounded-lg hover:bg-green-700 transition disabled:bg-gray-400"
+                            >
+                                Roll Ngay!
+                            </button>
+
+                            <p className="text-center text-sm text-gray-500 mt-4">Mua thêm lần roll ở Cửa Hàng nếu hết.</p>
                         </div>
                     </div>
                 );
@@ -2321,6 +2521,16 @@
                                     >
                                         🪱 Mồi Câu
                                     </button>
+                                    <button
+                                        onClick={() => setShopTab('rolls')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            shopTab === 'rolls' 
+                                                ? 'bg-purple-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🎲 Roll Tộc
+                                    </button>
                                 </div>
 
                                 <div className="mb-6 p-4 bg-blue-50 rounded-lg">
@@ -2330,12 +2540,12 @@
                                         🪱 Mồi: <span className="text-green-600">{baitInfo[currentBait].name}</span>
                                     </p>
                                 </div>
-                                
+
                                 {shopTab === 'rods' ? (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {shopItems.map((item) => {
                                             const isOwned = ownedRods.includes(item.unlocks);
-                                            
+            
                                             return (
                                                 <div
                                                     key={item.id}
@@ -2346,11 +2556,11 @@
                                                             ✓ Đã mua
                                                         </div>
                                                     )}
-                                                    
+                    
                                                     <div className="text-center mb-4">
                                                         <div className="text-5xl mb-3">🎣</div>
                                                     </div>
-                                                    
+                    
                                                     <h3 className="text-2xl font-bold mb-2 text-gray-800">
                                                         {item.name}
                                                     </h3>
@@ -2371,11 +2581,11 @@
                                             );
                                         })}
                                     </div>
-                                ) : (
+                                ) : shopTab === 'baits' ? (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {Object.entries(baitInfo).filter(([key]) => key !== 'normal').map(([baitType, bait]) => {
                                             const isOwned = ownedBaits.includes(baitType);
-                                            
+            
                                             return (
                                                 <div
                                                     key={baitType}
@@ -2387,7 +2597,7 @@
                                                             ✓ Đã mua
                                                         </div>
                                                     )}
-                                                    
+                    
                                                     <div className="text-center mb-4">
                                                         <div className="text-6xl mb-3">{bait.icon}</div>
                                                         <h3 className="text-2xl font-bold mb-2" style={{ color: bait.color }}>
@@ -2397,7 +2607,7 @@
                                                             {bait.description}
                                                         </p>
                                                     </div>
-                                                    
+                    
                                                     <div className="mb-4 text-sm text-gray-700">
                                                         <p className="font-bold mb-2">Giảm độ khó:</p>
                                                         <div className="space-y-1">
@@ -2409,7 +2619,6 @@
                                                             <p>Secret: {bait.difficulty.Secret}%</p>
                                                         </div>
                                                     </div>
-
                                                     <p className="text-3xl font-bold text-yellow-600 mb-4">
                                                         💰 {bait.price} xu
                                                     </p>
@@ -2424,7 +2633,52 @@
                                             );
                                         })}
                                     </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {rollItems.map((item) => {
+                                            const tribeData = tribes[tribe] || tribes['nguoi'];
+                                            const discount = tribeData.shopDiscount / 100;
+                                            const effectivePrice = Math.round(item.basePrice * (1 - discount));
+                                            const purchased = purchasedRollPacks[item.packType] || 0;
+                                            const isMax = purchased >= 10;
+
+                                            return (
+                                                <div
+                                                    key={item.id}
+                                                    className="border-4 border-gray-300 rounded-lg p-6 relative bg-gradient-to-b from-white to-gray-50"
+                                                >
+                                                    {isMax && (
+                                                        <div className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            Max 10
+                                                        </div>
+                                                    )}
+                    
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-5xl mb-3">🎲</div>
+                                                    </div>
+                    
+                                                    <h3 className="text-2xl font-bold mb-2 text-gray-800">
+                                                        {item.name}
+                                                    </h3>
+                                                    <p className="text-gray-600 mb-4 min-h-12">
+                                                        {item.description} (Đã mua: {purchased}/10)
+                                                    </p>
+                                                    <p className="text-3xl font-bold text-yellow-600 mb-4">
+                                                        💰 {effectivePrice} xu {discount > 0 && `(giảm ${tribeData.shopDiscount}%)`}
+                                                    </p>
+                                                    <button
+                                                        onClick={() => buyRollPack(item)}
+                                                        disabled={isMax || money < effectivePrice}
+                                                        className={`w-full py-3 text-white text-lg font-bold rounded-lg transition bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                                                    >
+                                                        {isMax ? 'Đã max' : money < effectivePrice ? 'Không đủ tiền' : 'Mua ngay'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 )}
+                                
                             </div>
                         </div>
                     </div>
@@ -2829,6 +3083,13 @@
                                     )}
 
                                     <button
+                                        onClick={() => setShowRollPanel(true)}
+                                        className="px-8 py-3 bg-cyan-600 text-white text-xl rounded-lg hover:bg-cyan-700 transform hover:scale-105 transition shadow-lg"
+                                    >
+                                        🎲 Roll Tộc ({rollCount} lần)
+                                    </button>
+
+                                    <button
                                         onClick={() => {
                                             setShowLeaderboard(true);
                                             loadLeaderboard();
@@ -2934,10 +3195,4 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
 
