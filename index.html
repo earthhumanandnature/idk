@@ -839,6 +839,7 @@
                         } else {
                             setAdminOutput(`⚠️ ${targetEmail} đã có cần câu ${rodType}`);
                             saveLog('admin_give_rod', { rod: rodType, target: targetEmail }, 0);
+                        }
 
                     } else if (command === '/help') {
                         setAdminOutput(`
@@ -2905,6 +2906,7 @@
     </script>
 </body>
 </html>
+
 
 
 
