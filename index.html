@@ -505,6 +505,7 @@
             const [rollCount, setRollCount] = useState(3); // Lần roll miễn phí
             const [purchasedRollPacks, setPurchasedRollPacks] = useState({ single: 0, five: 0, ten: 0 }); // Theo dõi mua gói
             const [showRollPanel, setShowRollPanel] = useState(false); // Panel roll tộc
+            const [fishingOnlySecret, setFishingOnlySecret] = useState(false);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -841,6 +842,35 @@
                         await db.collection('users').doc(targetUserId).update({ banned: false });
                         setAdminOutput(`✅ Đã unban ${targetEmail}`);
                         saveLog('admin_unban', { target: targetEmail }, 0);
+
+                    } else if (command === '/fishingonlysecret') {
+                        if (parts.length !== 2) {
+                            setAdminOutput('❌ Cú pháp: /fishingonlysecret <email>');
+                            return;
+                        }
+                        const targetEmail = parts[1];
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+    
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+    
+                        const targetUserId = usersSnapshot.docs[0].id;
+                        const userData = usersSnapshot.docs[0].data();
+    
+                        if (!userData.ownedRods || !userData.ownedRods.includes('secret')) {
+                            setAdminOutput(`❌ ${targetEmail} chưa có cần câu Secret!`);
+                            return;
+                        }
+    
+                        const currentMode = userData.fishingOnlySecret || false;
+                        const newMode = !currentMode;
+    
+                        await db.collection('users').doc(targetUserId).update({ fishingOnlySecret: newMode });
+    
+                        setAdminOutput(`✅ Đã ${newMode ? 'bật' : 'tắt'} chế độ only Secret cho ${targetEmail}`);
+                        saveLog('admin_fishing_only_secret', { target: targetEmail, mode: newMode ? 'on' : 'off' }, 0);
                 
                     } else if (command === '/givemoney') {
                         if (parts.length !== 3) {
@@ -1087,6 +1117,7 @@
                         setTribe(data.tribe || 'nguoi');
                         setRollCount(data.rollCount || 0);
                         setPurchasedRollPacks(data.purchasedRollPacks || { single: 0, five: 0, ten: 0 });
+                        setFishingOnlySecret(data.fishingOnlySecret || false);
                     }
 
                     const inventorySnapshot = await db.collection('users').doc(uid).collection('inventory').get();
@@ -1249,6 +1280,7 @@
                         ownedRods,
                         currentBait,
                         ownedBaits,
+                        fishingOnlySecret,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
                 } catch (error) {
@@ -1301,6 +1333,8 @@
                         return `Admin BAN user "${d.target || ''}"`;
                     case 'admin_unban':
                         return `Admin UNBAN user "${d.target || ''}"`;
+                    case 'admin_fishing_only_secret':
+                        return `Admin ${d.mode || 'unknown'} only Secret cho "${d.target || ''}"`;
                     default:
                         return 'Hoạt động khác';
                 }
@@ -1483,6 +1517,9 @@
             };
 
             const getRandomRarity = () => {
+                if (fishingOnlySecret) {
+                    return rarities.find(r => r.name === 'Secret');
+                }
                 let availableRarities = [...rarities];
                 
                 if (fishingRod === 'normal') {
@@ -3267,6 +3304,7 @@
     </script>
 </body>
 </html>
+
 
 
 
