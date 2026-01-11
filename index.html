@@ -1497,8 +1497,6 @@
                     const tribeData = tribes[tribe] || tribes['nguoi'];
                     const baseTime = rarity.time * (1 + tribeData.timeBonus / 100);
                     setTimeLeft(Math.ceil(baseTime));  // Làm tròn lên (1.9 → 2, 2.5 → 3)
-                    const tribeData = tribes[tribe] || tribes['nguoi'];
-                    setTimeLeft(rarity.time * (1 + tribeData.timeBonus / 100));
                     setGameState('question');
                 }, 1500);
             };
@@ -3203,5 +3201,6 @@
     </script>
 </body>
 </html>
+
 
 
