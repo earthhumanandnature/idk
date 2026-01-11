@@ -1134,6 +1134,17 @@
                         setPurchasedRollPacks(data.purchasedRollPacks || { single: 0, five: 0, ten: 0 });
                         setFishingOnlySecret(data.fishingOnlySecret || false);
                         setIsBanned(data.banned || false);
+
+                        // ⭐⭐⭐ THÊM LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
+                        if (data.banned === true) {
+                            // User bị ban → chuyển ngay sang trang banned
+                            setGameState('banned');
+                        } else if (gameState === 'banned') {
+                            // User được unban → quay lại menu (và load data realtime)
+                            setGameState('menu');
+                            // Optional: Load lại data nếu cần (nhưng listener đã tự update)
+                            // loadGameData(userId); // Nếu muốn reload toàn bộ
+                        }
                     }
                 });
 
@@ -3380,6 +3391,7 @@
     </script>
 </body>
 </html>
+
 
 
 
