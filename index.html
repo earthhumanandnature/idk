@@ -906,6 +906,64 @@
                             saveLog('admin_give_rod', { rod: rodType, target: targetEmail }, 0);
                         }
 
+                    } else if (command === '/giveroll') {
+                        if (parts.length !== 3) {
+                            setAdminOutput('❌ Cú pháp: /giveroll <số lần roll> <email>');
+                            return;
+                        }
+
+                        const amount = parseInt(parts[1]);
+                        if (isNaN(amount) || amount <= 0) {
+                            setAdminOutput('❌ Số lần roll phải là số dương!');
+                            return;
+                        }
+
+                        const targetEmail = parts[2];
+
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+    
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+
+                        const targetUserId = usersSnapshot.docs[0].id;
+                        const userData = usersSnapshot.docs[0].data();
+                        const newRollCount = (userData.rollCount || 0) + amount;
+
+                        await db.collection('users').doc(targetUserId).update({ rollCount: newRollCount });
+
+                        setAdminOutput(`✅ Đã tặng ${amount} lần roll cho ${targetEmail}`);
+                        saveLog('admin_give_roll', { amount, target: targetEmail }, 0);
+
+                    } else if (command === '/setrace') {
+                        if (parts.length !== 3) {
+                            setAdminOutput('❌ Cú pháp: /setrace <tên tộc> <email> (tộc: nguoi, ca, nemo, poseidon)');
+                            return;
+                        }
+
+                        const tribeKey = parts[1].toLowerCase();
+                        if (!Object.keys(tribes).includes(tribeKey)) {
+                            setAdminOutput('❌ Tộc không hợp lệ! (nguoi, ca, nemo, poseidon)');
+                            return;
+                        }
+
+                        const targetEmail = parts[2];
+
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+    
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+
+                        const targetUserId = usersSnapshot.docs[0].id;
+
+                        await db.collection('users').doc(targetUserId).update({ tribe: tribeKey });
+
+                        setAdminOutput(`✅ Đã set tộc "${tribes[tribeKey].name}" cho ${targetEmail}`);
+                        saveLog('admin_set_race', { tribe: tribes[tribeKey].name, target: targetEmail }, 0);
+
                     } else if (command === '/help') {
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
@@ -921,18 +979,26 @@
                         /giverod <legendary|mythic|secret> <email>
                           → Tặng cần câu cho BẤT KỲ người chơi nào
                           → VD: /giverod mythic player@gmail.com
-                          
+
                         /ban <email>
-                          → Ban bất người chơi nào
+                          → Ban người chơi (hiển thị thông báo ban khi login)
                           → VD: /ban player@gmail.com
 
                         /unban <email>
-                          → UNBan bất người chơi nào
+                          → Unban người chơi (xóa trạng thái ban)
                           → VD: /unban player@gmail.com
+
+                        /giveroll <số lần roll> <email>
+                          → Tặng số lần roll tộc cho người chơi
+                          → VD: /giveroll 5 player@gmail.com
+
+                        /setrace <tên tộc> <email>
+                          → Set tộc cho người chơi (nguoi, ca, nemo, poseidon)
+                          → VD: /setrace poseidon player@gmail.com
 
                         /help - Hiển thị trợ giúp
                         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                        ✅ Bạn có thể give cho MỌI email, không chỉ admin!
+                        ✅ Bạn có thể give/ban cho MỌI email, không chỉ admin!
                         `);
 
                     } else {
@@ -3201,6 +3267,7 @@
     </script>
 </body>
 </html>
+
 
 
 
