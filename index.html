@@ -1090,14 +1090,15 @@
                     if (user) {
                         setUserId(user.uid);
                         setCurrentUser(user.email);
-    
+
                         // ⭐ KIỂM TRA BAN TRƯỚC KHI LOAD DATA
                         const gameDoc = await db.collection('users').doc(user.uid).get();
                         if (gameDoc.exists && gameDoc.data().banned === true) {
+                            auth.signOut();  // ⭐ Thêm: Force signOut nếu banned
                             setGameState('banned');
                             return; // DỪNG, KHÔNG LOAD DATA
                         }
-    
+
                         // Không load data nữa, listener sẽ handle
                         setGameState('menu');
                     } else {
@@ -1135,9 +1136,10 @@
                         setFishingOnlySecret(data.fishingOnlySecret || false);
                         setIsBanned(data.banned || false);
 
-                        // ⭐⭐⭐ THÊM LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
+                        // ⭐⭐⭐ LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
                         if (data.banned === true) {
-                            // User bị ban → chuyển ngay sang trang banned
+                            // User bị ban → signOut và chuyển ngay sang trang banned
+                            auth.signOut(); // Force logout để tránh access tiếp
                             setGameState('banned');
                         } else if (gameState === 'banned') {
                             // User được unban → quay lại menu (và load data realtime)
@@ -1174,7 +1176,7 @@
                     unsubscribeInventory();
                     unsubscribeQuests();
                 };
-            }, [userId]);
+            }, [userId, gameState]);  // ⭐ Thêm gameState vào dependency để track thay đổi
 
             const loadGameData = async (uid) => {
                 try {
@@ -3391,6 +3393,7 @@
     </script>
 </body>
 </html>
+
 
 
 
