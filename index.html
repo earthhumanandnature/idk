@@ -1122,25 +1122,24 @@
                 }
             };
 
-            // ⭐ HÀM LƯU LOG (GỌI TỪ CÁC EVENT)
-            // ⭐ HÀM LƯU LOG (với DEBUG)
+            // ⭐ HÀM LƯU LOG (với DEBUG CHI TIẾT)
             const saveLog = async (action, details = {}, amount = 0) => {
                 if (!userId || !currentUser) {
                     console.warn('⚠️ Skip log: No userId/currentUser');
                     return;
                 }
                 try {
-                    console.log('💾 Saving log:', action, details, amount); // DEBUG
-                    await db.collection('logs').add({
+                    console.log('💾 Saving log:', { action, details, amount, userEmail: currentUser }); // DEBUG CHI TIẾT
+                    const logRef = await db.collection('logs').add({
                         action,
                         userEmail: currentUser,
                         details,
                         amount,
                         timestamp: firebase.firestore.FieldValue.serverTimestamp()
                     });
-                    console.log('✅ Log saved:', action);
+                    console.log('✅ Log saved with ID:', logRef.id); // DEBUG ID DOC
                 } catch (error) {
-                    console.error('❌ Lỗi lưu log:', error);
+                    console.error('❌ Lỗi lưu log chi tiết:', error.message); // DEBUG ERROR
                 }
             };
 
@@ -1233,10 +1232,13 @@
                     snapshot.docs.forEach((doc) => {
                         const data = doc.data();
                         const ts = data.timestamp?.toDate();
+                        console.log('📄 Doc ID:', doc.id, '| TS:', ts ? ts.toISOString() : 'NULL', '| Action:', data.action); // DEBUG MỖI DOC
                         if (ts && ts > yesterday) {
                             logs24h.push({ id: doc.id, ...data });
-                        } else if (ts) {
+                        } else if (ts) {  // Chỉ xóa nếu có TS (bỏ qua null để retry sau)
                             oldRefs.push(doc.ref);
+                        } else {
+                            console.warn('⚠️ Doc no timestamp:', doc.id); // DEBUG NULL TS
                         }
                     });
 
@@ -1441,15 +1443,14 @@
 
             const checkAnswer = async () => {
                 const userAnswer = parseInt(answer);
-
                 if (userAnswer === currentFish.math.correctAnswer) {
                     try {
                         // Cập nhật nhiệm vụ giải toán
                         await updateQuestProgress('solve', 1);
-    
+
                         // Cập nhật nhiệm vụ câu cá
                         await updateQuestProgress('catch', 1, currentFish.rarity);
-    
+
                         // Thêm cá vào Firestore
                         const docRef = await db.collection('users').doc(userId).collection('inventory').add({
                             name: currentFish.name,
@@ -1460,7 +1461,6 @@
                             favourite: false,
                             caughtAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
-
                         // Thêm cá vào state inventory (không xóa cá cũ)
                         setInventory(prevInventory => [
                             ...prevInventory,
@@ -1474,23 +1474,25 @@
                                 favourite: false
                             }
                         ]);
-
-                        // ⭐ THÊM LOG CÂU CÁ
-                        saveLog('catch_fish', {
+                        // ⭐ THÊM LOG CÂU CÁ (với AWAIT & DEBUG)
+                        console.log('🔥 Bắt đầu lưu log catch_fish...'); // DEBUG
+                        await saveLog('catch_fish', {
                             name: currentFish.name,
                             rarity: currentFish.rarity,
                             weight: currentFish.weight,
                             price: currentFish.price
                         });
+                        console.log('✅ Log catch_fish lưu thành công!'); // DEBUG
 
                         setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
-    
+
                         setGameState('result');
                         setTimeout(() => {
                             setGameState('menu');
                             setAnswer('');
                         }, 3000);
                     } catch (error) {
+                        console.error('❌ Lỗi toàn bộ checkAnswer:', error); // DEBUG THÊM
                         alert('Lỗi khi lưu cá: ' + error.message);
                     }
                 } else {
@@ -1534,7 +1536,9 @@
                     updateMoneyWithAnimation(newMoney, totalMoney);
                     await db.collection('users').doc(userId).update({ money: newMoney });
                     // ⭐ THÊM LOG BÁN CÁ
+                    console.log('🔥 Bắt đầu lưu log sell_fish...');
                     saveLog('sell_fish', { count: fishToSell.length, total: totalMoney }, totalMoney);
+                    console.log('✅ Log sell_fish lưu thành công!');
         
                     // Cập nhật nhiệm vụ kiếm tiền
                     await updateQuestProgress('earn', totalMoney);
@@ -2930,6 +2934,7 @@
     </script>
 </body>
 </html>
+
 
 
 
