@@ -496,6 +496,10 @@
             const [moneyChange, setMoneyChange] = useState(0);
             const [showMoneyChange, setShowMoneyChange] = useState(false);
             const [isBanned, setIsBanned] = useState(false);
+            // ⭐ THÊM STATE LOGS
+            const [showLogs, setShowLogs] = useState(false);
+            const [logsData, setLogsData] = useState([]);
+            const [loadingLogs, setLoadingLogs] = useState(false);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -739,6 +743,7 @@
                         });
 
                         setAdminOutput(`✅ Đã tặng "${fishName}" (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
+                        saveLog('admin_give_fish', { fish: fishName, weight, target: targetEmail }, fishPrice);
 
                     } else if (command === '/ban') {
                         if (parts.length !== 2) {
@@ -754,6 +759,8 @@
                         const targetUserId = usersSnapshot.docs[0].id;
                         await db.collection('users').doc(targetUserId).update({ banned: true });
                         setAdminOutput(`✅ Đã ban ${targetEmail}`);
+                        saveLog('admin_ban', { target: targetEmail }, 0);
+                        
                     } else if (command === '/unban') {
                         if (parts.length !== 2) {
                             setAdminOutput('❌ Cú pháp: /unban <email>');
@@ -768,6 +775,7 @@
                         const targetUserId = usersSnapshot.docs[0].id;
                         await db.collection('users').doc(targetUserId).update({ banned: false });
                         setAdminOutput(`✅ Đã unban ${targetEmail}`);
+                        saveLog('admin_unban', { target: targetEmail }, 0);
                 
                     } else if (command === '/givemoney') {
                         if (parts.length !== 3) {
@@ -797,6 +805,7 @@
                         await db.collection('users').doc(targetUserId).update({ money: newMoney });
 
                         setAdminOutput(`✅ Đã tặng ${amount} xu cho ${targetEmail}`);
+                        saveLog('admin_give_money', { amount, target: targetEmail }, amount);
 
                     } else if (command === '/giverod') {
                         if (parts.length !== 3) {
@@ -829,7 +838,7 @@
                             setAdminOutput(`✅ Đã tặng cần câu ${rodType} cho ${targetEmail}`);
                         } else {
                             setAdminOutput(`⚠️ ${targetEmail} đã có cần câu ${rodType}`);
-                        }
+                            saveLog('admin_give_rod', { rod: rodType, target: targetEmail }, 0);
 
                     } else if (command === '/help') {
                         setAdminOutput(`
@@ -1079,6 +1088,8 @@
                 );
 
                 updateMoneyWithAnimation(newMoney, quest.reward); // ← Thay đổi
+                // ⭐ THÊM LOG QUEST
+                saveLog('quest_reward', { quest: quest.title, reward: quest.reward }, quest.reward);
                 setDailyQuests(newQuests);
 
                 try {
@@ -1107,6 +1118,51 @@
                     }, { merge: true });
                 } catch (error) {
                     console.error('Lỗi khi lưu:', error);
+                }
+            };
+
+            // ⭐ HÀM LƯU LOG (GỌI TỪ CÁC EVENT)
+            const saveLog = async (action, details = {}, amount = 0) => {
+                if (!userId) return;
+                try {
+                    await db.collection('logs').add({
+                        action,
+                        userEmail: currentUser,
+                        details,
+                        amount,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (error) {
+                    console.error('Lỗi lưu log:', error);
+                }
+            };
+
+            // ⭐ FORMAT MESSAGE LOGS
+            const formatLogMessage = (log) => {
+                const d = log.details || {};
+                switch (log.action) {
+                    case 'catch_fish':
+                        return `${d.name || 'Cá'} (${d.weight || 0}kg, ${d.rarity || 'Unknown'})`;
+                    case 'buy_rod':
+                        return `Mua cần câu "${d.rod || 'Unknown'} (${d.price || 0} xu)`;
+                    case 'buy_bait':
+                        return `Mua mồi "${d.bait || 'Unknown'} (${d.price || 0} xu)`;
+                    case 'sell_fish':
+                        return `Bán ${d.count || 0} cá (nhận ${d.total || 0} xu)`;
+                    case 'quest_reward':
+                        return `Nhận thưởng nhiệm vụ "${d.quest || 'Unknown'} (${d.reward || 0} xu)"`;
+                    case 'admin_give_fish':
+                        return `Admin tặng cá "${d.fish || 'Unknown'} (${d.weight || 0}kg)"`;
+                    case 'admin_give_money':
+                        return `Admin tặng ${d.amount || 0} xu`;
+                    case 'admin_give_rod':
+                        return `Admin tặng cần "${d.rod || 'Unknown'}";`;
+                    case 'admin_ban':
+                        return `Admin BAN user "${d.target || ''}"`;
+                    case 'admin_unban':
+                        return `Admin UNBAN user "${d.target || ''}"`;
+                    default:
+                        return 'Hoạt động khác';
                 }
             };
 
@@ -1143,6 +1199,44 @@
                    setLoadingLeaderboard(false);
                }
            };
+
+            // ⭐ LOAD LOGS 24H QUA & XÓA CŨ
+            const loadLogs = async () => {
+                setLoadingLogs(true);
+                try {
+                    const now = firebase.firestore.Timestamp.now();
+                    const yesterday = new firebase.firestore.Timestamp(now.seconds - 86400, now.nanoseconds); // 24h ago
+
+                    // Query logs mới
+                    const newSnapshot = await db.collection('logs')
+                        .where('timestamp', '>', yesterday)
+                        .orderBy('timestamp', 'desc')
+                        .limit(200)  // Max 200 logs gần nhất
+                        .get();
+
+                    // XÓA LOGS CŨ HƠN 24H (AUTO CLEAN)
+                    const oldSnapshot = await db.collection('logs')
+                        .where('timestamp', '<=', yesterday)
+                        .get();
+                    if (!oldSnapshot.empty) {
+                        const batch = db.batch();
+                        oldSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+                        await batch.commit();
+                        console.log(`🗑️ Xóa ${oldSnapshot.size} logs cũ`);
+                    }
+
+                    // Format & reverse (mới nhất đầu)
+                    const logs = newSnapshot.docs
+                        .map((doc) => ({ id: doc.id, ...doc.data() }))
+                        .reverse();
+                    setLogsData(logs);
+                } catch (error) {
+                    console.error('Lỗi load logs:', error);
+                    setLogsData([]);
+                } finally {
+                    setLoadingLogs(false);
+                }
+            };
 
             const handleRegister = async () => {
                 if (!email.trim() || !email.includes('@')) {
@@ -1359,6 +1453,14 @@
                             }
                         ]);
 
+                        // ⭐ THÊM LOG CÂU CÁ
+                        saveLog('catch_fish', {
+                            name: currentFish.name,
+                            rarity: currentFish.rarity,
+                            weight: currentFish.weight,
+                            price: currentFish.price
+                        });
+
                         setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
     
                         setGameState('result');
@@ -1409,6 +1511,8 @@
                     const newMoney = money + totalMoney;
                     updateMoneyWithAnimation(newMoney, totalMoney);
                     await db.collection('users').doc(userId).update({ money: newMoney });
+                    // ⭐ THÊM LOG BÁN CÁ
+                    saveLog('sell_fish', { count: fishToSell.length, total: totalMoney }, totalMoney);
         
                     // Cập nhật nhiệm vụ kiếm tiền
                     await updateQuestProgress('earn', totalMoney);
@@ -1492,6 +1596,9 @@
                     ownedRods: newOwnedRods
                 });
 
+                // ⭐ THÊM LOG MUA CẦN
+                saveLog('buy_rod', { rod: item.name, price: item.price }, -item.price);
+
                 setMessage(`✅ Đã mua ${item.name} thành công! Vào Balo để trang bị.`);
                 setTimeout(() => setMessage(''), 3000);
             };
@@ -1519,6 +1626,9 @@
                     money: newMoney,
                     ownedBaits: newOwnedBaits
                 });
+
+                // ⭐ THÊM LOG MUA MỒI
+                saveLog('buy_bait', { bait: bait.name, price: bait.price }, -bait.price);
 
                 setMessage(`✅ Đã mua ${bait.name} thành công! Vào Balo để trang bị.`);
                 setTimeout(() => setMessage(''), 3000);
@@ -1638,6 +1748,89 @@
                                 {adminOutput && (
                                     <div className="p-4 bg-gray-900 text-green-400 rounded-lg font-mono text-sm whitespace-pre-wrap">
                                         {adminOutput}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            // ⭐ PANEL LOGS (CHỈ ADMIN)
+            if (showLogs) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
+                        {/* Money bar giống admin panel */}
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div 
+                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}
+                                    style={{ animation: 'slideUp 2s ease-out forwards' }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
+                        </div>
+            
+                        <div className="max-w-6xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h2 className="text-3xl font-bold text-gray-800">📋 Activity Logs (24h qua)</h2>
+                                        <p className="text-sm text-gray-600 mt-1">Tự động xóa logs cũ hơn 24h</p>
+                                    </div>
+                                    <div className="space-x-2">
+                                        <button
+                                            onClick={loadLogs}
+                                            disabled={loadingLogs}
+                                            className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 transition"
+                                        >
+                                            {loadingLogs ? '⏳' : '🔄'} Refresh
+                                        </button>
+                                        <button
+                                            onClick={() => setShowLogs(false)}
+                                            className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                                        >
+                                            Quay lại
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {loadingLogs ? (
+                                    <div className="flex justify-center py-12">
+                                        <div className="text-xl text-gray-500">⏳ Đang tải logs...</div>
+                                    </div>
+                                ) : logsData.length === 0 ? (
+                                    <div className="text-center py-12 text-gray-500 text-xl">
+                                        📭 Chưa có hoạt động trong 24h qua
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 max-h-[70vh] overflow-y-auto p-4 bg-gray-50 rounded-xl">
+                                        {logsData.map((log) => (
+                                            <div key={log.id} className="p-4 bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <strong className="text-lg text-gray-800">{log.userEmail}</strong>
+                                                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                                        {log.timestamp?.toDate ? log.timestamp.toDate().toLocaleString('vi-VN') : 'N/A'}
+                                                    </span>
+                                                </div>
+                                                <p className="text-gray-700 font-medium">{formatLogMessage(log)}</p>
+                                                {log.amount !== 0 && log.amount !== undefined && (
+                                                    <span className={`ml-2 px-3 py-1 rounded-full text-sm font-bold ${
+                                                        log.amount > 0 
+                                                            ? 'bg-green-100 text-green-800' 
+                                                            : 'bg-red-100 text-red-800'
+                                                    }`}>
+                                                        {log.amount > 0 ? `+${formatMoney(Math.abs(log.amount))}` : formatMoney(Math.abs(log.amount))} xu
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
                                     </div>
                                 )}
                             </div>
@@ -2597,6 +2790,15 @@
                                         </button>
                                     )}
 
+                                    {isAdmin && (
+                                        <button
+                                            onClick={() => { setShowLogs(true); loadLogs(); }}
+                                            className="px-8 py-3 bg-indigo-600 text-white text-xl rounded-lg hover:bg-indigo-700 transform hover:scale-105 transition shadow-lg"
+                                        >
+                                            📋 Logs
+                                        </button>
+                                    )}
+
                                     <button
                                         onClick={() => {
                                             setShowLeaderboard(true);
@@ -2703,6 +2905,7 @@
     </script>
 </body>
 </html>
+
 
 
 
