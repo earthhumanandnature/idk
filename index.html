@@ -506,6 +506,7 @@
             const [purchasedRollPacks, setPurchasedRollPacks] = useState({ single: 0, five: 0, ten: 0 }); // Theo dõi mua gói
             const [showRollPanel, setShowRollPanel] = useState(false); // Panel roll tộc
             const [fishingOnlySecret, setFishingOnlySecret] = useState(false);
+            const [deletePassword, setDeletePassword] = useState('');  // Không dùng, nhưng nếu muốn modal thì dùng
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -1800,18 +1801,30 @@
             const deleteAccount = async () => {
                 if (!window.confirm('Bạn chắc chắn muốn xóa tài khoản vĩnh viễn? Tất cả dữ liệu sẽ mất!')) return;
     
+                // Prompt password để re-auth
+                const password = window.prompt('Nhập mật khẩu để xác thực và xóa tài khoản:');
+                if (!password) {
+                    alert('Hủy xóa!');
+                    return;
+                }
+    
                 try {
+                    // Re-authenticate
+                    const credential = firebase.auth.EmailAuthProvider.credential(currentUser, password);
+                    await auth.currentUser.reauthenticateWithCredential(credential);
+        
+                    // Bây giờ delete an toàn
                     // Xóa subcollections trước (inventory và quests)
                     const inventoryRef = db.collection('users').doc(userId).collection('inventory');
                     const questsRef = db.collection('users').doc(userId).collection('quests');
-                    
+        
                     // Xóa tất cả docs trong inventory
                     const inventoryDocs = await inventoryRef.get();
                     for (const doc of inventoryDocs.docs) {
                         await doc.ref.delete();
                     }
         
-                    // Xóa tất cả docs trong quests (thường chỉ có 'daily', nhưng an toàn)
+                    // Xóa tất cả docs trong quests
                     const questsDocs = await questsRef.get();
                     for (const doc of questsDocs.docs) {
                         await doc.ref.delete();
@@ -1829,13 +1842,15 @@
                     alert('Tài khoản đã xóa vĩnh viễn!');
                 } catch (error) {
                     console.error('Delete error:', error);
-                    if (error.code === 'auth/requires-recent-login') {
-                        alert('Vui lòng đăng nhập lại để xóa tài khoản!');
+                    if (error.code === 'auth/wrong-password') {
+                        alert('Mật khẩu sai! Hãy thử lại.');
+                    } else if (error.code === 'auth/requires-recent-login') {
+                        alert('Phiên đăng nhập hết hạn. Hãy đăng xuất và đăng nhập lại để xóa!');
                         await auth.signOut();
                         setGameState('login');
                     } else {
                         alert('Lỗi khi xóa: ' + error.message);
-                    }            
+                    }
                 }
             };
             
@@ -3366,6 +3381,7 @@
     </script>
 </body>
 </html>
+
 
 
 
