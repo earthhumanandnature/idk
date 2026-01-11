@@ -844,11 +844,23 @@
                         saveLog('admin_unban', { target: targetEmail }, 0);
 
                     } else if (command === '/fishingonlysecret') {
-                        if (parts.length !== 2) {
-                            setAdminOutput('❌ Cú pháp: /fishingonlysecret <email>');
+                        if (parts.length !== 3) {
+                            setAdminOutput('❌ Cú pháp: /fishingonlysecret <email> <on/off>');
                             return;
                         }
                         const targetEmail = parts[1];
+                        const modeStr = parts[2].toLowerCase();
+    
+                        let newMode;
+                        if (modeStr === 'on') {
+                            newMode = true;
+                        } else if (modeStr === 'off') {
+                            newMode = false;
+                        } else {
+                            setAdminOutput('❌ Mode phải là "on" hoặc "off"!');
+                            return;
+                        }
+    
                         const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
     
                         if (usersSnapshot.empty) {
@@ -864,12 +876,9 @@
                             return;
                         }
     
-                        const currentMode = userData.fishingOnlySecret || false;
-                        const newMode = !currentMode;
-    
                         await db.collection('users').doc(targetUserId).update({ fishingOnlySecret: newMode });
     
-                        setAdminOutput(`✅ Đã ${newMode ? 'bật' : 'tắt'} chế độ only Secret cho ${targetEmail}`);
+                        setAdminOutput(`✅ Đã set chế độ only Secret cho ${targetEmail} thành ${newMode ? 'ON' : 'OFF'}`);
                         saveLog('admin_fishing_only_secret', { target: targetEmail, mode: newMode ? 'on' : 'off' }, 0);
                 
                     } else if (command === '/givemoney') {
@@ -3304,6 +3313,7 @@
     </script>
 </body>
 </html>
+
 
 
 
