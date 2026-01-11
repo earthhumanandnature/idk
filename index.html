@@ -1089,16 +1089,15 @@
                     if (user) {
                         setUserId(user.uid);
                         setCurrentUser(user.email);
-            
+    
                         // ⭐ KIỂM TRA BAN TRƯỚC KHI LOAD DATA
                         const gameDoc = await db.collection('users').doc(user.uid).get();
                         if (gameDoc.exists && gameDoc.data().banned === true) {
                             setGameState('banned');
                             return; // DỪNG, KHÔNG LOAD DATA
                         }
-            
-                        // Không banned → load bình thường
-                        await loadGameData(user.uid);
+    
+                        // Không load data nữa, listener sẽ handle
                         setGameState('menu');
                     } else {
                         setGameState('login');
@@ -1116,6 +1115,55 @@
                     return () => clearTimeout(saveTimer);
                 }
             }, [money, fishingRod, ownedRods, currentBait, ownedBaits, userId]);
+
+            useEffect(() => {
+                if (!userId) return;
+
+                // Listener cho user document (money, rods, baits, tribe, roll, etc.)
+                const unsubscribeUser = db.collection('users').doc(userId).onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        setMoney(data.money || 0);
+                        setDisplayMoney(data.money || 0); // Đồng bộ displayMoney
+                        setFishingRod(data.fishingRod || 'normal');
+                        setOwnedRods(data.ownedRods || ['normal']);
+                        setCurrentBait(data.currentBait || 'normal');
+                        setOwnedBaits(data.ownedBaits || ['normal']);
+                        setTribe(data.tribe || 'nguoi');
+                        setRollCount(data.rollCount || 0);
+                        setPurchasedRollPacks(data.purchasedRollPacks || { single: 0, five: 0, ten: 0 });
+                        setFishingOnlySecret(data.fishingOnlySecret || false);
+                        setIsBanned(data.banned || false);
+                    }
+                });
+
+                // Listener cho inventory collection (cá mới từ /givefish)
+                const unsubscribeInventory = db.collection('users').doc(userId).collection('inventory').onSnapshot((snapshot) => {
+                    const fishList = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    setInventory(fishList);
+                });
+
+                // Listener cho quests (nếu admin thêm lệnh sau, hoặc an toàn)
+                const unsubscribeQuests = db.collection('users').doc(userId).collection('quests').doc('daily').onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const questData = doc.data();
+                        setDailyQuests(questData.quests || []);
+                        setLastQuestReset(questData.lastReset ? questData.lastReset.toDate() : null);
+                    } else {
+                        // Nếu không tồn tại, init mới
+                        checkAndResetQuests(userId);
+                    }
+                });
+
+                return () => {
+                    unsubscribeUser();
+                    unsubscribeInventory();
+                    unsubscribeQuests();
+                };
+            }, [userId]);
 
             const loadGameData = async (uid) => {
                 try {
@@ -3331,6 +3379,7 @@
     </script>
 </body>
 </html>
+
 
 
 
