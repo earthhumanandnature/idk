@@ -1086,18 +1086,20 @@
             // Lắng nghe trạng thái đăng nhập
             // Lắng nghe trạng thái đăng nhập (FIX BAN)
             useEffect(() => {
+                if (!userId) return;  // Skip nếu userId chưa set
+
                 // Listener cho user document (money, rods, baits, tribe, etc.)
                 const unsubscribeUser = db.collection('users').doc(userId).onSnapshot((doc) => {
                     if (doc.exists) {
                         const data = doc.data();
-        
+   
                         // Kiểm tra ban trước tiên
                         if (data.banned === true) {
-                            auth.signOut();  // Sign out ngay
-                            setGameState('banned');  // Chuyển state
-                            return;  // Dừng, không update state khác
+                            auth.signOut(); // Sign out ngay
+                            setGameState('banned'); // Chuyển state
+                            return; // Dừng, không update state khác
                         }
-        
+   
                         // Update state bình thường nếu không ban
                         setMoney(data.money || 0);
                         setDisplayMoney(data.money || 0);
@@ -1114,11 +1116,11 @@
                         // Nếu doc không tồn tại (xóa), signOut
                         auth.signOut();
                         setGameState('login');
-                    }
+                    }            
                 });
-                return () => unsubscribe();
-            }, []);
-
+    
+                return () => unsubscribeUser();
+            }, [userId]);
             // Auto-save game data
             useEffect(() => {
                 if (userId && gameState === 'menu') {
@@ -3393,6 +3395,7 @@
     </script>
 </body>
 </html>
+
 
 
 
