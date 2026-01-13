@@ -3236,19 +3236,18 @@
                                 >
                                     Bắt đầu câu cá
                                 </button>
-                                
-                                <div className="flex gap-4 justify-center mt-6">
+        
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 justify-center mt-6">
                                     <button
                                         onClick={() => setShowInventory(true)}
-                                        className="px-8 py-3 bg-green-600 text-white text-xl rounded-lg hover:bg-green-700 transform hover:scale-105 transition shadow-lg flex items-center gap-2"
+                                        className="px-4 py-2 text-lg sm:px-8 sm:py-3 sm:text-xl bg-green-600 text-white rounded-lg hover:bg-green-700 transform hover:scale-105 transition shadow-lg flex items-center gap-2 w-full"
                                     >
                                         <PackageIcon size={24} />
                                         Balo ({inventory.length})
                                     </button>
-
                                     <button
                                         onClick={() => setShowQuests(true)}
-                                        className="px-8 py-3 bg-indigo-600 text-white text-xl rounded-lg hover:bg-indigo-700 transform hover:scale-105 transition shadow-lg relative"
+                                        className="px-4 py-2 text-lg sm:px-8 sm:py-3 sm:text-xl bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transform hover:scale-105 transition shadow-lg relative w-full"
                                     >
                                         📋 Nhiệm vụ
                                         {dailyQuests.filter(q => q.completed && !q.claimed).length > 0 && (
@@ -3257,58 +3256,53 @@
                                             </span>
                                         )}
                                     </button>
-
                                     {isAdmin && (
                                         <button
                                             onClick={() => setShowAdminPanel(true)}
-                                            className="px-8 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white text-xl rounded-lg hover:from-red-700 hover:to-pink-700 transform hover:scale-105 transition shadow-lg border-2 border-yellow-400 animate-pulse"
+                                            className="px-4 py-2 text-lg sm:px-8 sm:py-3 sm:text-xl bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-lg hover:from-red-700 hover:to-pink-700 transform hover:scale-105 transition shadow-lg border-2 border-yellow-400 animate-pulse w-full"
                                         >
                                             ⚙️ Admin Command
                                         </button>
                                     )}
-
                                     {isAdmin && (
                                         <button
                                             onClick={() => { setShowLogs(true); loadLogs(); }}
-                                            className="px-8 py-3 bg-indigo-600 text-white text-xl rounded-lg hover:bg-indigo-700 transform hover:scale-105 transition shadow-lg"
+                                            className="px-4 py-2 text-lg sm:px-8 sm:py-3 sm:text-xl bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transform hover:scale-105 transition shadow-lg w-full"
                                         >
                                             📋 Logs
                                         </button>
                                     )}
-
                                     <button
                                         onClick={() => setShowRollPanel(true)}
-                                        className="px-8 py-3 bg-cyan-600 text-white text-xl rounded-lg hover:bg-cyan-700 transform hover:scale-105 transition shadow-lg"
+                                        className="px-4 py-2 text-lg sm:px-8 sm:py-3 sm:text-xl bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transform hover:scale-105 transition shadow-lg w-full"
                                     >
                                         🎲 Roll Tộc ({rollCount} lần)
                                     </button>
-
                                     <button
                                         onClick={() => {
                                             setShowLeaderboard(true);
                                             loadLeaderboard();
                                         }}
-                                        className="px-8 py-3 bg-yellow-600 text-white text-xl rounded-lg hover:bg-yellow-700 transform hover:scale-105 transition shadow-lg"
+                                        className="px-4 py-2 text-lg sm:px-8 sm:py-3 sm:text-xl bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transform hover:scale-105 transition shadow-lg w-full"
                                     >
                                         🏆 Bảng xếp hạng
                                     </button>
-                                    
+            
                                     <button
                                         onClick={() => setShowShop(true)}
-                                        className="px-8 py-3 bg-purple-600 text-white text-xl rounded-lg hover:bg-purple-700 transform hover:scale-105 transition shadow-lg"
+                                        className="px-4 py-2 text-lg sm:px-8 sm:py-3 sm:text-xl bg-purple-600 text-white rounded-lg hover:bg-purple-700 transform hover:scale-105 transition shadow-lg w-full"
                                     >
                                         🪝 Cửa hàng
                                     </button>
-                                    
+            
                                     <button
                                         onClick={() => setShowSellConfirm(true)}
                                         disabled={inventory.filter(f => !f.favourite).length === 0}
-                                        className="px-8 py-3 bg-orange-600 text-white text-xl rounded-lg hover:bg-orange-700 transform hover:scale-105 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                        className="px-4 py-2 text-lg sm:px-8 sm:py-3 sm:text-xl bg-orange-600 text-white rounded-lg hover:bg-orange-700 transform hover:scale-105 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed disabled:hover:scale-100 w-full"
                                     >
                                         💵 Bán cá
                                     </button>
                                 </div>
-
                                 <div className="mt-6 p-4 bg-white bg-opacity-50 rounded-lg space-y-2">
                                     <p className="text-lg font-semibold text-gray-800">
                                         🎣 Cần câu: <span className="text-blue-600">{getRodName()}</span>
@@ -3389,6 +3383,7 @@
     </script>
 </body>
 </html>
+
 
 
 
