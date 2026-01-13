@@ -47,7 +47,7 @@
         .music-disc.playing {
             animation-play-state: running;
         }
-        
+    
         /* Music Player Styles */
         .music-player {
             position: fixed;
@@ -61,7 +61,7 @@
             color: white;
             transition: all 0.3s;
         }
-        
+    
         .music-player.collapsed {
             width: 64px;
             height: 64px;
@@ -71,11 +71,12 @@
             justify-content: center;
             cursor: pointer;
         }
-        
+    
         .music-player.expanded {
-            width: 384px;
+            width: 90vw; /* Responsive: 90% viewport width on mobile */
+            max-width: 384px; /* Keep max 384px on desktop */
         }
-        
+    
         .music-player input[type="range"] {
             -webkit-appearance: none;
             appearance: none;
@@ -86,7 +87,7 @@
             outline: none;
             cursor: pointer;
         }
-        
+    
         .music-player input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
@@ -96,7 +97,7 @@
             border-radius: 50%;
             cursor: pointer;
         }
-        
+    
         .music-player input[type="range"]::-moz-range-thumb {
             width: 16px;
             height: 16px;
@@ -105,13 +106,28 @@
             cursor: pointer;
             border: none;
         }
-        
+    
         .music-player button {
             transition: all 0.2s;
         }
-        
+    
         .music-player button:hover {
             transform: scale(1.05);
+        }
+
+        /* Add media query for further mobile adjustments */
+        @media (max-width: 640px) {
+            .music-player.expanded {
+                padding: 12px; /* Reduce padding on mobile */
+                font-size: 14px; /* Smaller text */
+            }
+            .music-player.expanded h3 {
+                font-size: 16px;
+            }
+            .music-disc {
+                width: 96px;
+                height: 96px;
+            }
         }
     </style>
     
@@ -3383,6 +3399,7 @@
     </script>
 </body>
 </html>
+
 
 
 
