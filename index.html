@@ -2715,186 +2715,201 @@
             }
 
             if (showInventory) {
-                return (
-                    <div
-                      className="min-h-screen bg-cover bg-center p-8"
-                      style={{ backgroundImage: "url('inbackpack.png')" }}
-                    >
-                        {/* Thay thế phần hiển thị money cũ */}
-                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">
-                                💰 {formatMoney(Math.floor(displayMoney))} xu
-                            </p>
-                            {showMoneyChange && (
-                                <div
-                                    className={absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;moneyChange > 0 ? 'text-green-500' : 'text-red-500' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}}
-                                    style={{
-                                        animation: 'slideUp 2s ease-out forwards'
-                                    }}
-                                >
-                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
-                                </div>
-                            )}
-                        </div>
-                       
-                        <div className="max-w-6xl mx-auto">
-                            <div className="bg-white rounded-lg shadow-2xl p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-3xl font-bold text-gray-800">🎒 Balo</h2>
-                                    <button
-                                        onClick={() => {
-                                            setShowInventory(false);
-                                            setInventoryTab('fish');
-                                        }}
-                                        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-                                    >
-                                        Quay lại
-                                    </button>
-                                </div>
-                                <div className="flex gap-2 mb-6">
-                                    <button
-                                        onClick={() => setInventoryTab('fish')}
-                                        className={flex-1 py-3 rounded-lg font-bold transition ${ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inventoryTab === 'fish' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;? 'bg-blue-600 text-white' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 'bg-gray-300 text-gray-700' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}}
-                                    >
-                                        🐟 Cá ({inventory.length})
-                                    </button>
-                                    <button
-                                        onClick={() => setInventoryTab('rods')}
-                                        className={flex-1 py-3 rounded-lg font-bold transition ${ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inventoryTab === 'rods' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;? 'bg-blue-600 text-white' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 'bg-gray-300 text-gray-700' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}}
-                                    >
-                                        🎣 Cần câu ({ownedRods.length})
-                                    </button>
-                                    <button
-                                        onClick={() => setInventoryTab('baits')}
-                                        className={flex-1 py-3 rounded-lg font-bold transition ${ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inventoryTab === 'baits' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;? 'bg-blue-600 text-white' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 'bg-gray-300 text-gray-700' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}}
-                                    >
-                                        🪱 Mồi câu ({ownedBaits.length})
-                                    </button>
-                                </div>
-                               
-                                {inventoryTab === 'fish' ? (
-                                    <div>
-                                        {inventory.length === 0 ? (
-                                            <p className="text-center text-gray-500 text-xl py-12">Chưa có cá nào trong balo!</p>
-                                        ) : (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                {inventory.map((fish) => (
-                                                    <div
-                                                        key={fish.id}
-                                                        className="border-4 rounded-lg p-4 relative"
-                                                        style={{ borderColor: fish.color }}
-                                                    >
-                                                        <button
-                                                            onClick={() => toggleFavourite(fish.id, fish.favourite)}
-                                                            className="absolute top-2 right-2 text-3xl hover:scale-110 transition"
-                                                        >
-                                                            {fish.favourite ? '⭐' : '☆'}
-                                                        </button>
-                                                       
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <FishIcon size={32} color={fish.color} />
-                                                            <h3 className="text-xl font-bold" style={{ color: fish.color }}>
-                                                                {fish.name}
-                                                            </h3>
-                                                        </div>
-                                                        <div className="space-y-1 text-gray-700">
-                                                            <p><strong>Độ hiếm:</strong> {fish.rarity}</p>
-                                                            <p><strong>Cân nặng:</strong> {fish.weight} kg</p>
-                                                            <p><strong>Giá trị:</strong> {fish.price} xu</p>
+                return (
+                    <div
+                      className="min-h-screen bg-cover bg-center p-8"
+                      style={{ backgroundImage: "url('inbackpack.png')" }}
+                    >
+                        {/* Thay thế phần hiển thị money cũ */}
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div 
+                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
+                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
+                                    }`}
+                                    style={{
+                                        animation: 'slideUp 2s ease-out forwards'
+                                    }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="max-w-6xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-gray-800">🎒 Balo</h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowInventory(false);
+                                            setInventoryTab('fish');
+                                        }}
+                                        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setInventoryTab('fish')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            inventoryTab === 'fish' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🐟 Cá ({inventory.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setInventoryTab('rods')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            inventoryTab === 'rods' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🎣 Cần câu ({ownedRods.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setInventoryTab('baits')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            inventoryTab === 'baits' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        🪱 Mồi câu ({ownedBaits.length})
+                                    </button>
+                                </div>
+                                
+                                {inventoryTab === 'fish' ? (
+                                    <div>
+                                        {inventory.length === 0 ? (
+                                            <p className="text-center text-gray-500 text-xl py-12">Chưa có cá nào trong balo!</p>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {inventory.map((fish) => (
+                                                    <div
+                                                        key={fish.id}
+                                                        className="border-4 rounded-lg p-4 relative"
+                                                        style={{ borderColor: fish.color }}
+                                                    >
+                                                        <button
+                                                            onClick={() => toggleFavourite(fish.id, fish.favourite)}
+                                                            className="absolute top-2 right-2 text-3xl hover:scale-110 transition"
+                                                        >
+                                                            {fish.favourite ? '⭐' : '☆'}
+                                                        </button>
+                                                        
+                                                        <div className="flex items-center gap-3 mb-2">
+                                                            <FishIcon size={32} color={fish.color} />
+                                                            <h3 className="text-xl font-bold" style={{ color: fish.color }}>
+                                                                {fish.name}
+                                                            </h3>
+                                                        </div>
+                                                        <div className="space-y-1 text-gray-700">
+                                                            <p><strong>Độ hiếm:</strong> {fish.rarity}</p>
+                                                            <p><strong>Cân nặng:</strong> {fish.weight} kg</p>
+                                                            <p><strong>Giá trị:</strong> {fish.price} xu</p>
                                                             {fish.mutation && (
                                                                 <p className="text-sm font-bold mt-1" style={{ color: weatherConfig[currentWeather]?.color }}>
                                                                     ✨ Mutation: {fish.mutation} (+{((fish.bonusMultiplier - 1) * 100)}%)
                                                                 </p>
                                                             )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : inventoryTab === 'rods' ? (
-                                    <div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {ownedRods.map((rodType, index) => (
-                                                <div
-                                                    key={index}
-                                                    className="border-4 rounded-lg p-6 relative"
-                                                    style={{ borderColor: getRodColor(rodType) }}
-                                                >
-                                                    {fishingRod === rodType && (
-                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                                                            ✓ Đang dùng
-                                                        </div>
-                                                    )}
-                                                   
-                                                    <div className="text-center mb-4">
-                                                        <div className="text-5xl mb-2">🎣</div>
-                                                        <h3 className="text-xl font-bold mb-2" style={{ color: getRodColor(rodType) }}>
-                                                            {getRodNameByType(rodType)}
-                                                        </h3>
-                                                        <p className="text-gray-600 text-sm mb-4">
-                                                            {getRodDescription(rodType)}
-                                                        </p>
-                                                    </div>
-                                                   
-                                                    {fishingRod !== rodType && (
-                                                        <button
-                                                            onClick={() => equipRod(rodType)}
-                                                            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                                                        >
-                                                            Trang bị
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                            {ownedBaits.map((baitType, index) => {
-                                                const bait = baitInfo[baitType];
-                                                return (
-                                                    <div
-                                                        key={index}
-                                                        className="border-4 rounded-lg p-6 relative"
-                                                        style={{ borderColor: bait.color }}
-                                                    >
-                                                        {currentBait === baitType && (
-                                                            <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                                                                ✓ Đang dùng
-                                                            </div>
-                                                        )}
-                                                       
-                                                        <div className="text-center mb-4">
-                                                            <div className="text-5xl mb-2">{bait.icon}</div>
-                                                            <h3 className="text-xl font-bold mb-2" style={{ color: bait.color }}>
-                                                                {bait.name}
-                                                            </h3>
-                                                            <p className="text-gray-600 text-sm mb-4">
-                                                                {bait.description}
-                                                            </p>
-                                                        </div>
-                                                       
-                                                        {currentBait !== baitType && (
-                                                            <button
-                                                                onClick={() => equipBait(baitType)}
-                                                                className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                                                            >
-                                                                Trang bị
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : inventoryTab === 'rods' ? (
+                                    <div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {ownedRods.map((rodType, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="border-4 rounded-lg p-6 relative"
+                                                    style={{ borderColor: getRodColor(rodType) }}
+                                                >
+                                                    {fishingRod === rodType && (
+                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            ✓ Đang dùng
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-5xl mb-2">🎣</div>
+                                                        <h3 className="text-xl font-bold mb-2" style={{ color: getRodColor(rodType) }}>
+                                                            {getRodNameByType(rodType)}
+                                                        </h3>
+                                                        <p className="text-gray-600 text-sm mb-4">
+                                                            {getRodDescription(rodType)}
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    {fishingRod !== rodType && (
+                                                        <button
+                                                            onClick={() => equipRod(rodType)}
+                                                            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                        >
+                                                            Trang bị
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            {ownedBaits.map((baitType, index) => {
+                                                const bait = baitInfo[baitType];
+                                                return (
+                                                    <div
+                                                        key={index}
+                                                        className="border-4 rounded-lg p-6 relative"
+                                                        style={{ borderColor: bait.color }}
+                                                    >
+                                                        {currentBait === baitType && (
+                                                            <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                                ✓ Đang dùng
+                                                            </div>
+                                                        )}
+                                                        
+                                                        <div className="text-center mb-4">
+                                                            <div className="text-5xl mb-2">{bait.icon}</div>
+                                                            <h3 className="text-xl font-bold mb-2" style={{ color: bait.color }}>
+                                                                {bait.name}
+                                                            </h3>
+                                                            <p className="text-gray-600 text-sm mb-4">
+                                                                {bait.description}
+                                                            </p>
+                                                        </div>
+                                                        
+                                                        {currentBait !== baitType && (
+                                                            <button
+                                                                onClick={() => equipBait(baitType)}
+                                                                className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                            >
+                                                                Trang bị
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
 
             if (showShop) {
                 return (
@@ -3633,6 +3648,7 @@
     </script>
 </body>
 </html>
+
 
 
 
