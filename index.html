@@ -7,6 +7,29 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script>
+        // Khởi tạo Firebase TRƯỚC KHI bất kỳ code nào khác chạy
+        (function() {
+            const firebaseConfig = {
+                apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
+                authDomain: "fishing-game-b3de4.firebaseapp.com",
+                projectId: "fishing-game-b3de4",
+                storageBucket: "fishing-game-b3de4.firebasestorage.app",
+                messagingSenderId: "995387752934",
+                appId: "1:995387752934:web:ccb5c73999a23d7715d627",
+                measurementId: "G-2BYJH3JMTZ"
+            };
+
+            // Khởi tạo Firebase
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+        
+            // Expose auth và db ra global scope để dùng ở mọi nơi
+            window.firebaseAuth = firebase.auth();
+            window.firebaseDB = firebase.firestore();
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes slideUp {
@@ -438,7 +461,7 @@
             
             window.addEventListener('load', function() {
                 // Check if Firebase auth is available
-                if (window.firebase && window.firebase.auth) {
+                if (window.firebaseAuth) {
                     window.firebase.auth().onAuthStateChanged(function(user) {
                         if (user && !playerInitialized) {
                             // User is logged in, initialize music player
@@ -460,25 +483,6 @@
     </script>
 
     <script type="text/babel">
-        const firebaseConfig = {
-                apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
-                authDomain: "fishing-game-b3de4.firebaseapp.com",
-                projectId: "fishing-game-b3de4",
-                storageBucket: "fishing-game-b3de4.firebasestorage.app",
-                messagingSenderId: "995387752934",
-                appId: "1:995387752934:web:ccb5c73999a23d7715d627",
-                measurementId: "G-2BYJH3JMTZ"
-            };
-
-            // Khởi tạo Firebase
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-    
-            // Khởi tạo auth và db
-            const auth = firebase.auth();
-            const db = firebase.firestore();
-    
             // ✅ SAU ĐÓ MỚI DÙNG REACT
             const { useState, useEffect, useRef } = React;
 
@@ -3641,6 +3645,7 @@
     </script>
 </body>
 </html>
+
 
 
 
