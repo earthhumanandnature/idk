@@ -460,25 +460,27 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
-
-        // ⚠️ THAY ĐỔI CONFIG NÀY BẰNG FIREBASE CONFIG CỦA BẠN
         const firebaseConfig = {
-          apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
-          authDomain: "fishing-game-b3de4.firebaseapp.com",
-          projectId: "fishing-game-b3de4",
-          storageBucket: "fishing-game-b3de4.firebasestorage.app",
-          messagingSenderId: "995387752934",
-          appId: "1:995387752934:web:ccb5c73999a23d7715d627",
-          measurementId: "G-2BYJH3JMTZ"
-        };
+                apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
+                authDomain: "fishing-game-b3de4.firebaseapp.com",
+                projectId: "fishing-game-b3de4",
+                storageBucket: "fishing-game-b3de4.firebasestorage.app",
+                messagingSenderId: "995387752934",
+                appId: "1:995387752934:web:ccb5c73999a23d7715d627",
+                measurementId: "G-2BYJH3JMTZ"
+            };
 
-        // Khởi tạo Firebase
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+            // Khởi tạo Firebase
+            if (!firebase.apps.length) {
+                firebase.initializeApp(firebaseConfig);
+            }
+    
+            // Khởi tạo auth và db
+            const auth = firebase.auth();
+            const db = firebase.firestore();
+    
+            // ✅ SAU ĐÓ MỚI DÙNG REACT
+            const { useState, useEffect, useRef } = React;
 
         const FishIcon = ({ size = 24, color = "#000" }) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
@@ -3639,6 +3641,7 @@
     </script>
 </body>
 </html>
+
 
 
 
