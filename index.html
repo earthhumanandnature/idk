@@ -548,7 +548,7 @@
             const [deletePassword, setDeletePassword] = useState('');  // Không dùng, nhưng nếu muốn modal thì dùng
             const [currentWeather, setCurrentWeather] = useState('normal');
             const [weatherData, setWeatherData] = useState({ richter: 0, clouds: 0, water: 0 });
-            const [prevWeather, setPrevWeather] = useState('normal');
+            const prevWeatherRef = useRef('normal');
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -1251,46 +1251,37 @@
                 });
 
             useEffect(() => {
-                const unsub = db
-                        .collection('global')
-                        .doc('weather')
-                        .onSnapshot((doc) => {
-                                if (doc.exists) {
-                                        const data = doc.data();
-                                        const newWeather = data.currentWeather || 'normal';
-
-                                        setCurrentWeather(newWeather);
-                                        setWeatherData({
-                                                richter: data.richter || 0,
-                                                clouds: data.clouds || 0,
-                                                water: data.water || 0
-                                        });
-
-                                        // ⭐ THÔNG BÁO KHI THAY ĐỔI
-                                        if (newWeather !== prevWeather) {
-                                                setMessage(
-                                                        `🌤️ Thời tiết mới: ${getWeatherName(newWeather)}`
-                                                );
-                                                setPrevWeather(newWeather);
-                                                setTimeout(() => setMessage(''), 5000);
-                                        }
-                                } else {
-                                        // Init nếu chưa có
-                                        db.collection('global').doc('weather').set({
-                                                currentWeather: 'normal',
-                                                richter: 0,
-                                                clouds: 0,
-                                                water: 0,
-                                                lastUpdate:
-                                                        firebase.firestore.FieldValue.serverTimestamp(),
-                                                nextUpdate:
-                                                        firebase.firestore.FieldValue.serverTimestamp()
-                                        });
-                                }
+                const unsub = db.collection('global').doc('weather').onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        const newWeather = data.currentWeather || 'normal';
+                        setCurrentWeather(newWeather);
+                        setWeatherData({
+                            richter: data.richter || 0,
+                            clouds: data.clouds || 0,
+                            water: data.water || 0
                         });
 
+                        // ⭐ THÔNG BÁO KHI THAY ĐỔI (sử dụng ref để check prev)
+                        if (newWeather !== prevWeatherRef.current) {
+                            setMessage(`🌤️ Thời tiết mới: ${getWeatherName(newWeather)}`);
+                            prevWeatherRef.current = newWeather;
+                            setTimeout(() => setMessage(''), 5000);
+                        }
+                    } else {
+                        // Init nếu chưa có
+                        db.collection('global').doc('weather').set({
+                            currentWeather: 'normal',
+                            richter: 0,
+                            clouds: 0,
+                            water: 0,
+                            lastUpdate: firebase.firestore.FieldValue.serverTimestamp(),
+                            nextUpdate: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                });
                 return unsub;
-            }, [prevWeather]);
+            }, []);
 
             useEffect(() => {
                 if (!isAdmin) return;
@@ -1306,7 +1297,7 @@
                     }
                 }, 300000); // 5p
                 return () => clearInterval(interval);
-            }, []);
+            }, [isAdmin]);
 
                 return () => {
                     unsubscribeUser();
@@ -3648,6 +3639,7 @@
     </script>
 </body>
 </html>
+
 
 
 
