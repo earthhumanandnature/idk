@@ -4,32 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fishingwiththemath</title>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script>
-        // Khởi tạo Firebase TRƯỚC KHI bất kỳ code nào khác chạy
-        (function() {
-            const firebaseConfig = {
-                apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
-                authDomain: "fishing-game-b3de4.firebaseapp.com",
-                projectId: "fishing-game-b3de4",
-                storageBucket: "fishing-game-b3de4.firebasestorage.app",
-                messagingSenderId: "995387752934",
-                appId: "1:995387752934:web:ccb5c73999a23d7715d627",
-                measurementId: "G-2BYJH3JMTZ"
-            };
-
-            // Khởi tạo Firebase
-            if (!firebase.apps.length) {
-                firebase.initializeApp(firebaseConfig);
-            }
-        
-            // Expose auth và db ra global scope để dùng ở mọi nơi
-            window.firebaseAuth = firebase.auth();
-            window.firebaseDB = firebase.firestore();
-        })();
-    </script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes slideUp {
@@ -178,9 +155,9 @@
     </style>
     
     <!-- Firebase SDK -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.gemmin.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -461,7 +438,7 @@
             
             window.addEventListener('load', function() {
                 // Check if Firebase auth is available
-                if (window.firebaseAuth) {
+                if (window.firebase && window.firebase.auth) {
                     window.firebase.auth().onAuthStateChanged(function(user) {
                         if (user && !playerInitialized) {
                             // User is logged in, initialize music player
@@ -483,8 +460,25 @@
     </script>
 
     <script type="text/babel">
-            // ✅ SAU ĐÓ MỚI DÙNG REACT
-            const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef } = React;
+
+        // ⚠️ THAY ĐỔI CONFIG NÀY BẰNG FIREBASE CONFIG CỦA BẠN
+        const firebaseConfig = {
+          apiKey: "AIzaSyAdRj_aTtKC4EpctQtiJymTPI5TIhXEQTU",
+          authDomain: "fishing-game-b3de4.firebaseapp.com",
+          projectId: "fishing-game-b3de4",
+          storageBucket: "fishing-game-b3de4.firebasestorage.app",
+          messagingSenderId: "995387752934",
+          appId: "1:995387752934:web:ccb5c73999a23d7715d627",
+          measurementId: "G-2BYJH3JMTZ"
+        };
+
+        // Khởi tạo Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
         const FishIcon = ({ size = 24, color = "#000" }) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2">
@@ -552,9 +546,6 @@
             const [showRollPanel, setShowRollPanel] = useState(false); // Panel roll tộc
             const [fishingOnlySecret, setFishingOnlySecret] = useState(false);
             const [deletePassword, setDeletePassword] = useState('');  // Không dùng, nhưng nếu muốn modal thì dùng
-            const [currentWeather, setCurrentWeather] = useState('normal');
-            const [weatherData, setWeatherData] = useState({ richter: 0, clouds: 0, water: 0 });
-            const prevWeatherRef = useRef('normal');
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -565,15 +556,6 @@
                 { name: 'Secret', weight: 1, range: 60, time: 10, color: '#F59E0B', price: 30 },
                 { name: 'Special(admin)', weight: 0, range: 0, time: 0, color: '#FFD700', price: NaN }
             ];
-
-            const weatherConfig = {
-                normal: { name: 'Bình thường ☀️', color: '#fbbf24', mutation: null, rate: 0, bonus: 1 },
-                earthquake: { name: 'Động đất 🌍', color: '#ef4444', mutation: 'rung', rate: 25, bonus: 1.5 },
-                rainbow: { name: 'Cầu vồng 🌈', color: '#ec4899', mutation: 'rainbow', rate: 20, bonus: 2.0 },
-                rain: { name: 'Mưa ☔', color: '#3b82f6', mutation: 'wet', rate: 35, bonus: 1.2 },
-                volcano: { name: 'Núi lửa 🔥', color: '#dc2626', mutation: 'lava', rate: 60, bonus: 3.0 }, // admin
-                blackhole: { name: 'Hố đen 🕳️', color: '#1f2937', mutation: 'void', rate: 100, bonus: 10.0 } // admin
-            };
 
             // Format số tiền
             const formatMoney = (amount) => {
@@ -605,7 +587,6 @@
             const MAX_MONEY = 1000000000; // 1 tỷ
 
             const isAdmin = currentUser === 'vvt158214@gmail.com';
-            const getWeatherName = (type) => weatherConfig[type]?.name || 'Bình thường ☀️';
 
             const fishNames = {
                 'Common': ['Cá Rô', 'Cá Chép', 'Cá Trê', 'Cá Lóc'],
@@ -1062,36 +1043,6 @@
                         setAdminOutput(`✅ Đã set tộc "${tribes[tribeKey].name}" cho ${targetEmail}`);
                         saveLog('admin_set_race', { tribe: tribes[tribeKey].name, target: targetEmail }, 0);
 
-                    } else if (command === '/setweather') {
-                        if (parts.length !== 2) {
-                            setAdminOutput('❌ Cú pháp: /setweather <normal|earthquake|rainbow|rain|volcano|blackhole>');
-                            return;
-                        }
-                        const weatherType = parts[1].toLowerCase();
-                        if (!['normal', 'earthquake', 'rainbow', 'rain', 'volcano', 'blackhole'].includes(weatherType)) {
-                            setAdminOutput('❌ Weather không hợp lệ!');
-                            return;
-                        }
-                        const richter = weatherType === 'earthquake' ? '6.5' : '3.0';
-                        const clouds = weatherType === 'rainbow' ? '7.2' : '2.0';
-                        const water = weatherType === 'rain' ? '8.1' : '1.5';
-                        const nextUpdate = Date.now() + 5 * 60 * 1000;
-
-                        await db.collection('global').doc('weather').set({
-                            currentWeather: weatherType,
-                            richter,
-                            clouds,
-                            water,
-                            lastUpdate: firebase.firestore.FieldValue.serverTimestamp(),
-                            nextUpdate: firebase.firestore.Timestamp.fromMillis(nextUpdate)
-                        });
-
-                        setAdminOutput(`✅ Set weather: ${getWeatherName(weatherType)}`);
-                        saveLog('admin_set_weather', { weather: weatherType }, 0);
-
-                    } else if (command === '/randomweather') {
-                        executeRandomWeather();
-
                     } else if (command === '/help') {
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
@@ -1212,7 +1163,7 @@
                     if (doc.exists) {
                         const data = doc.data();
                         setMoney(data.money || 0);
-                        setDisplayMoney(data.money || 0);
+                        setDisplayMoney(data.money || 0); // Đồng bộ displayMoney
                         setFishingRod(data.fishingRod || 'normal');
                         setOwnedRods(data.ownedRods || ['normal']);
                         setCurrentBait(data.currentBait || 'normal');
@@ -1225,10 +1176,12 @@
 
                         // ⭐⭐⭐ LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
                         if (data.banned === true) {
+                            // User bị ban → chuyển ngay sang trang banned (KHÔNG SIGNOUT)
                             setGameState('banned');
                         } else if (gameState === 'banned') {
+                            // User được unban → quay lại menu REALTIME (và load data)
                             setGameState('menu');
-                            loadGameData(userId);
+                            loadGameData(userId); // Reload data để đồng bộ sau unban
                         }
                     }
                 });
@@ -1249,70 +1202,17 @@
                         setDailyQuests(questData.quests || []);
                         setLastQuestReset(questData.lastReset ? questData.lastReset.toDate() : null);
                     } else {
+                        // Nếu không tồn tại, init mới
                         checkAndResetQuests(userId);
                     }
                 });
 
-                // ⭐ CHUYỂN WEATHER LISTENER VÀO ĐÂY
-                const unsubscribeWeather = db.collection('global').doc('weather').onSnapshot((doc) => {
-                    if (doc.exists) {
-                        const data = doc.data();
-                        const newWeather = data.currentWeather || 'normal';
-                        setCurrentWeather(newWeather);
-                        setWeatherData({
-                            richter: data.richter || 0,
-                            clouds: data.clouds || 0,
-                            water: data.water || 0
-                        });
-
-                        // ⭐ THÔNG BÁO KHI THAY ĐỔI (sử dụng ref để check prev)
-                        if (newWeather !== prevWeatherRef.current) {
-                            setMessage(`🌤️ Thời tiết mới: ${getWeatherName(newWeather)}`);
-                            prevWeatherRef.current = newWeather;
-                            setTimeout(() => setMessage(''), 5000);
-                        }
-                    } else {
-                        // Init nếu chưa có (chạy async để tránh block)
-                        db.collection('global').doc('weather').set({
-                            currentWeather: 'normal',
-                            richter: 0,
-                            clouds: 0,
-                            water: 0,
-                            lastUpdate: firebase.firestore.FieldValue.serverTimestamp(),
-                            nextUpdate: firebase.firestore.FieldValue.serverTimestamp()
-                        }).catch(error => console.error('Init weather error:', error));
-                    }
-                });
-
-                // ⭐ CHUYỂN ADMIN WEATHER INTERVAL VÀO ĐÂY
-                let weatherInterval = null;
-                if (isAdmin) {
-                    weatherInterval = setInterval(async () => {
-                        try {
-                            const doc = await db.collection('global').doc('weather').get();
-                            if (doc.exists) {
-                                const data = doc.data();
-                                const now = Date.now();
-                                if (now > (data.nextUpdate?.toMillis() || 0)) {
-                                    // Random new weather
-                                    await executeRandomWeather();
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Weather interval error:', error);
-                        }
-                    }, 300000); // 5 phút
-                }
-
-                // ⭐ CLEANUP CHO TẤT CẢ (4 listeners + 1 interval)
                 return () => {
                     unsubscribeUser();
                     unsubscribeInventory();
                     unsubscribeQuests();
-                    unsubscribeWeather();
-                    if (weatherInterval) clearInterval(weatherInterval);
                 };
-            }, [userId, gameState, isAdmin]); // ⭐ THÊM isAdmin VÀO DEPENDENCY  // ⭐ Thêm gameState vào dependency để track thay đổi
+            }, [userId, gameState]);  // ⭐ Thêm gameState vào dependency để track thay đổi
 
             const loadGameData = async (uid) => {
                 try {
@@ -1479,30 +1379,6 @@
                 } catch (error) {
                     console.error('Lỗi khi nhận thưởng:', error);
                 }
-            };
-
-            const executeRandomWeather = async () => {
-                const richter = (Math.random() * 9 + 1).toFixed(1);
-                const clouds = (Math.random() * 9 + 1).toFixed(1);
-                const water = (Math.random() * 9 + 1).toFixed(1);
-
-                let newWeather = 'normal';
-                if (parseFloat(richter) > 5) newWeather = 'earthquake';
-                else if (parseFloat(clouds) > 5) newWeather = 'rainbow';
-                else if (parseFloat(water) > 5) newWeather = 'rain';
-
-                const nextUpdate = Date.now() + 5 * 60 * 1000;
-
-                await db.collection('global').doc('weather').set({
-                    currentWeather: newWeather,
-                    richter,
-                    clouds,
-                    water,
-                    lastUpdate: firebase.firestore.FieldValue.serverTimestamp(),
-                    nextUpdate: firebase.firestore.Timestamp.fromMillis(nextUpdate)
-                });
-
-                setAdminOutput(`✅ Random weather: ${getWeatherName(newWeather)} (Richter:${richter}, Clouds:${clouds}, Water:${water})`);
             };
 
             const saveGameData = async () => {
@@ -1780,81 +1656,6 @@
                 return availableRarities[0];
             };
 
-            const generateFish = () => {
-                let maxRarityIndex = 1; // Common & Uncommon
-
-                if (ownedRods.includes('legendary')) maxRarityIndex = 3;
-                if (ownedRods.includes('mythic')) maxRarityIndex = 4;
-                if (ownedRods.includes('secret')) maxRarityIndex = 5;
-
-                if (fishingOnlySecret && ownedRods.includes('secret')) {
-                        maxRarityIndex = 5; // Chỉ secret nếu mode on
-                }
-
-                const availableRarities = rarities.slice(0, maxRarityIndex + 1);
-                const totalWeight = availableRarities.reduce(
-                        (sum, r) => sum + r.weight,
-                        0
-                );
-
-                let random = Math.random() * totalWeight;
-                let selectedRarity = null;
-
-                for (const rarity of availableRarities) {
-                        if (random < rarity.weight) {
-                                selectedRarity = rarity;
-                                break;
-                        }
-                        random -= rarity.weight;
-                }
-
-                const names = fishNames[selectedRarity.name];
-                const name = names[Math.floor(Math.random() * names.length)];
-
-                let weight = 1.0;
-                let increaseChance = 1.0;
-
-                while (Math.random() < increaseChance) {
-                        weight += 0.1;
-                        increaseChance -= 0.001;
-                }
-
-                weight = Math.round(weight * 10) / 10;
-                const price = Math.round(selectedRarity.price * weight);
-
-                let fish = {
-                        name,
-                        rarity: selectedRarity.name,
-                        weight,
-                        price,
-                        color: selectedRarity.color,
-                        math: generateMath(  // ✅ SỬA LẠI TÊN HÀM
-                            selectedRarity.range,
-                            selectedRarity.name  // ✅ THAY ĐỔI THAM SỐ THỨ 2
-                        ),
-                        time: selectedRarity.time + (tribes[tribe].timeBonus / 100 * selectedRarity.time)
-                    };
-    
-                    // ⭐⭐⭐ GỌI APPLY WEATHER MUTATION ⭐⭐⭐
-                    fish = applyWeatherMutation(fish);
-
-                return fish;
-            };
-
-            const applyWeatherMutation = (fish) => {
-                const weather = weatherConfig[currentWeather];
-                if (!weather || !weather.mutation) return fish;
-
-                // Roll mutation
-                if (Math.random() * 100 < weather.rate) {
-                    fish.mutation = weather.mutation;
-                    fish.bonusMultiplier = weather.bonus;
-                    fish.price = Math.round(fish.price * weather.bonus);
-                    fish.name += ` (${weather.mutation.toUpperCase()})`;
-                }
-                return fish;
-            };
-
             const calculateWeight = () => {
                 let weight = 1.0;
                 let increaseChance = 1.0;
@@ -1889,7 +1690,6 @@
                 setMessage('');
                 
                 setTimeout(() => {
-                    const fish = generateFish();
                     const rarity = getRandomRarity();
                     const fishName = fishNames[rarity.name][Math.floor(Math.random() * fishNames[rarity.name].length)];
                     const weight = calculateWeight();
@@ -1950,9 +1750,7 @@
                             price: currentFish.price,
                             color: currentFish.color,
                             favourite: false,
-                            caughtAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            mutation: currentFish.mutation || null,  // ⭐⭐⭐ THÊM MUTATION
-                            bonusMultiplier: currentFish.bonusMultiplier || 1  // ⭐⭐⭐ THÊM BONUS
+                            caughtAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
                         // Thêm cá vào state inventory (không xóa cá cũ)
                         setInventory(prevInventory => [
@@ -2026,10 +1824,6 @@
                     await batch.commit();
 
                     const newMoney = money + totalMoney;
-                    let total = 0;
-                    for (const fish of inventoryToSell) {
-                        total += fish.price;  // Đã có bonus trong price
-                    }
                     updateMoneyWithAnimation(newMoney, totalMoney);
                     await db.collection('users').doc(userId).update({ money: newMoney });
                     // ⭐ THÊM LOG BÁN CÁ
@@ -2366,13 +2160,6 @@
                                     className="w-full py-3 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition mb-4"
                                 >
                                     ▶️ Thực thi lệnh
-                                </button>
-
-                                <button
-                                    onClick={executeRandomWeather}
-                                    className="w-full py-3 bg-orange-600 text-white text-lg font-bold rounded-lg hover:bg-orange-700 transition mb-4"
-                                >
-                                    🌤️ Random Weather (5p)
                                 </button>
 
                                 {adminOutput && (
@@ -2813,11 +2600,6 @@
                                                             <p><strong>Độ hiếm:</strong> {fish.rarity}</p>
                                                             <p><strong>Cân nặng:</strong> {fish.weight} kg</p>
                                                             <p><strong>Giá trị:</strong> {fish.price} xu</p>
-                                                            {fish.mutation && (
-                                                                <p className="text-sm font-bold mt-1" style={{ color: weatherConfig[currentWeather]?.color }}>
-                                                                    ✨ Mutation: {fish.mutation} (+{((fish.bonusMultiplier - 1) * 100)}%)
-                                                                </p>
-                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -3582,21 +3364,16 @@
                         {gameState === 'question' && currentFish && (
                             <div className="bg-white rounded-lg p-8 shadow-2xl max-w-md">
                                 <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: currentFish.color + '20' }}>
-                                        <div className="flex justify-center mb-2">
-                                            <FishIcon size={48} color={currentFish.color} />
-                                        </div>
-                                        <h2 className="text-2xl font-bold mb-2" style={{ color: currentFish.color }}>
-                                            {currentFish.name}
-                                        </h2>
-                                        <p className="text-lg"><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
-                                        <p className="text-lg"><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
-                                        {/* ⭐⭐⭐ HIỂN THỊ MUTATION ⭐⭐⭐ */}
-                                        {currentFish.mutation && (
-                                            <p className="text-sm font-bold mt-1" style={{ color: weatherConfig[currentWeather]?.color }}>
-                                                ✨ Mutation: ⭐{currentFish.mutation} (+{((currentFish.bonusMultiplier - 1) * 100)}%)
-                                            </p>
-                                        )}
+                                    <div className="flex justify-center mb-2">
+                                        <FishIcon size={48} color={currentFish.color} />
                                     </div>
+                                    <h2 className="text-2xl font-bold mb-2" style={{ color: currentFish.color }}>
+                                        {currentFish.name}
+                                    </h2>
+                                    <p className="text-lg"><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
+                                    <p className="text-lg"><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
+                                </div>
+
                                 <div className="my-4 p-4 bg-gray-100 rounded-lg">
                                     <p className="text-sm text-purple-600 font-semibold mb-2">
                                         {baitInfo[currentBait].icon} Sử dụng: {baitInfo[currentBait].name}
@@ -3645,40 +3422,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
