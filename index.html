@@ -6,7 +6,7 @@
     <title>Fishingwiththemath</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.gemmin.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @keyframes slideUp {
@@ -1822,17 +1822,15 @@
                         weight,
                         price,
                         color: selectedRarity.color,
-                        math: generateMathQuestion(
-                                selectedRarity.range,
-                                baitInfo[currentBait].difficulty[selectedRarity.name]
+                        math: generateMath(  // ✅ SỬA LẠI TÊN HÀM
+                            selectedRarity.range,
+                            selectedRarity.name  // ✅ THAY ĐỔI THAM SỐ THỨ 2
                         ),
-                        time:
-                                selectedRarity.time +
-                                (tribes[tribe].timeBonus / 100 * selectedRarity.time)
-                };
-
-                // ⭐⭐⭐ GỌI APPLY WEATHER MUTATION ⭐⭐⭐
-                fish = applyWeatherMutation(fish);
+                        time: selectedRarity.time + (tribes[tribe].timeBonus / 100 * selectedRarity.time)
+                    };
+    
+                    // ⭐⭐⭐ GỌI APPLY WEATHER MUTATION ⭐⭐⭐
+                    fish = applyWeatherMutation(fish);
 
                 return fish;
             };
@@ -3641,6 +3639,7 @@
     </script>
 </body>
 </html>
+
 
 
 
