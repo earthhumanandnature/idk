@@ -23,123 +23,134 @@
 
     <style>
         @keyframes slideUp {
-            0% {
-                opacity: 1;
-                transform: translateY(0);
-            }
-            100% {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
+                0% {
+                        opacity: 1;
+                        transform: translateY(0);
+                }
+                100% {
+                        opacity: 0;
+                        transform: translateY(-30px);
+                }
         }
+
         @keyframes spin {
-            from {
-                transform: rotate(0deg);
-            }
-            to {
-                transform: rotate(360deg);
-            }
+                from {
+                        transform: rotate(0deg);
+                }
+                to {
+                        transform: rotate(360deg);
+                }
         }
+
         .music-disc {
-            animation: spin 3s linear infinite;
-            animation-play-state: paused;
+                animation: spin 3s linear infinite;
+                animation-play-state: paused;
         }
+
         .music-disc.playing {
-            animation-play-state: running;
+                animation-play-state: running;
         }
-    
+
         /* Music Player Styles */
         .music-player {
-            position: fixed;
-            bottom: 16px;
-            left: 16px;
-            background: linear-gradient(to bottom right, #9333ea, #ec4899);
-            border-radius: 12px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            padding: 16px;
-            z-index: 1000;
-            color: white;
-            transition: all 0.3s;
+                position: fixed;
+                bottom: 16px;
+                left: 16px;
+                background: linear-gradient(to bottom right, #9333ea, #ec4899);
+                border-radius: 12px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+                padding: 16px;
+                z-index: 1000;
+                color: white;
+                transition: all 0.3s;
         }
-    
+
         .music-player.collapsed {
-            width: 64px;
-            height: 64px;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
+                width: 64px;
+                height: 64px;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
         }
-    
+
         .music-player.expanded {
-            width: 33vw; /* Always 1/3 of screen width */
-            max-width: 384px; /* Keep max 384px on desktop */
+                width: 33vw; /* Always 1/3 of screen width */
+                max-width: 384px; /* Keep max 384px on desktop */
         }
-    
+
         .music-player input[type="range"] {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 4px;
-            outline: none;
-            cursor: pointer;
+                -webkit-appearance: none;
+                appearance: none;
+                width: 100%;
+                height: 8px;
+                background: rgba(255, 255, 255, 0.3);
+                border-radius: 4px;
+                outline: none;
+                cursor: pointer;
         }
-    
+
         .music-player input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            background: white;
-            border-radius: 50%;
-            cursor: pointer;
+                -webkit-appearance: none;
+                appearance: none;
+                width: 16px;
+                height: 16px;
+                background: white;
+                border-radius: 50%;
+                cursor: pointer;
         }
-    
+
         .music-player input[type="range"]::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
-            background: white;
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
+                width: 16px;
+                height: 16px;
+                background: white;
+                border-radius: 50%;
+                cursor: pointer;
+                border: none;
         }
-    
+
         .music-player button {
-            transition: all 0.2s;
+                transition: all 0.2s;
         }
-    
+
         .music-player button:hover {
-            transform: scale(1.05);
+                transform: scale(1.05);
         }
 
         /* Add media query for further mobile adjustments */
         @media (max-width: 640px) {
-            .music-player.expanded {
-                padding: 8px; /* Further reduce padding on mobile */
-                font-size: 12px; /* Smaller text */
-            }
-            .music-player.expanded h3 {
-                font-size: 14px;
-            }
-            .music-disc {
-                width: 80px; /* Smaller disc on mobile */
-                height: 80px;
-            }
-            .music-player button {
-                padding: 6px; /* Smaller buttons */
-                font-size: 16px;
-            }
-            .music-player input[type="range"] {
-                height: 6px; /* Thinner sliders */
-            }
-            .music-player input[type="range"]::-webkit-slider-thumb,
-            .music-player input[type="range"]::-moz-range-thumb {
-                width: 12px;
-                height: 12px;
-            }
+                .music-player.expanded {
+                        padding: 8px;
+                        font-size: 12px;
+                }
+                .music-player.expanded h3 {
+                        font-size: 14px;
+                }
+                .music-disc {
+                        width: 80px;
+                        height: 80px;
+                }
+                .music-player button {
+                        padding: 6px;
+                        font-size: 16px;
+                }
+                .music-player input[type="range"] {
+                        height: 6px;
+                }
+                .music-player input[type="range"]::-webkit-slider-thumb,
+                .music-player input[type="range"]::-moz-range-thumb {
+                        width: 12px;
+                        height: 12px;
+                }
+        }
+
+        /* Add scroll in landscape mode */
+        @media (orientation: landscape) {
+                .music-player.expanded {
+                        overflow-y: auto;
+                        max-height: 90vh;
+                }
         }
     </style>
     
@@ -3411,6 +3422,7 @@
     </script>
 </body>
 </html>
+
 
 
 
