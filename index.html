@@ -546,6 +546,9 @@
             const [showRollPanel, setShowRollPanel] = useState(false); // Panel roll tộc
             const [fishingOnlySecret, setFishingOnlySecret] = useState(false);
             const [deletePassword, setDeletePassword] = useState('');  // Không dùng, nhưng nếu muốn modal thì dùng
+            const [currentWeather, setCurrentWeather] = useState('normal');
+            const [weatherData, setWeatherData] = useState({ richter: 0, clouds: 0, water: 0 });
+            const [prevWeather, setPrevWeather] = useState('normal');
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -556,6 +559,15 @@
                 { name: 'Secret', weight: 1, range: 60, time: 10, color: '#F59E0B', price: 30 },
                 { name: 'Special(admin)', weight: 0, range: 0, time: 0, color: '#FFD700', price: NaN }
             ];
+
+            const weatherConfig = {
+                normal: { name: 'Bình thường ☀️', color: '#fbbf24', mutation: null, rate: 0, bonus: 1 },
+                earthquake: { name: 'Động đất 🌍', color: '#ef4444', mutation: 'rung', rate: 25, bonus: 1.5 },
+                rainbow: { name: 'Cầu vồng 🌈', color: '#ec4899', mutation: 'rainbow', rate: 20, bonus: 2.0 },
+                rain: { name: 'Mưa ☔', color: '#3b82f6', mutation: 'wet', rate: 35, bonus: 1.2 },
+                volcano: { name: 'Núi lửa 🔥', color: '#dc2626', mutation: 'lava', rate: 60, bonus: 3.0 }, // admin
+                blackhole: { name: 'Hố đen 🕳️', color: '#1f2937', mutation: 'void', rate: 100, bonus: 10.0 } // admin
+            };
 
             // Format số tiền
             const formatMoney = (amount) => {
@@ -587,6 +599,7 @@
             const MAX_MONEY = 1000000000; // 1 tỷ
 
             const isAdmin = currentUser === 'vvt158214@gmail.com';
+            const getWeatherName = (type) => weatherConfig[type]?.name || 'Bình thường ☀️';
 
             const fishNames = {
                 'Common': ['Cá Rô', 'Cá Chép', 'Cá Trê', 'Cá Lóc'],
@@ -1043,6 +1056,36 @@
                         setAdminOutput(`✅ Đã set tộc "${tribes[tribeKey].name}" cho ${targetEmail}`);
                         saveLog('admin_set_race', { tribe: tribes[tribeKey].name, target: targetEmail }, 0);
 
+                    } else if (command === '/setweather') {
+                        if (parts.length !== 2) {
+                            setAdminOutput('❌ Cú pháp: /setweather <normal|earthquake|rainbow|rain|volcano|blackhole>');
+                            return;
+                        }
+                        const weatherType = parts[1].toLowerCase();
+                        if (!['normal', 'earthquake', 'rainbow', 'rain', 'volcano', 'blackhole'].includes(weatherType)) {
+                            setAdminOutput('❌ Weather không hợp lệ!');
+                            return;
+                        }
+                        const richter = weatherType === 'earthquake' ? '6.5' : '3.0';
+                        const clouds = weatherType === 'rainbow' ? '7.2' : '2.0';
+                        const water = weatherType === 'rain' ? '8.1' : '1.5';
+                        const nextUpdate = Date.now() + 5 * 60 * 1000;
+
+                        await db.collection('global').doc('weather').set({
+                            currentWeather: weatherType,
+                            richter,
+                            clouds,
+                            water,
+                            lastUpdate: firebase.firestore.FieldValue.serverTimestamp(),
+                            nextUpdate: firebase.firestore.Timestamp.fromMillis(nextUpdate)
+                        });
+
+                        setAdminOutput(`✅ Set weather: ${getWeatherName(weatherType)}`);
+                        saveLog('admin_set_weather', { weather: weatherType }, 0);
+
+                    } else if (command === '/randomweather') {
+                        executeRandomWeather();
+
                     } else if (command === '/help') {
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
@@ -1206,6 +1249,64 @@
                         checkAndResetQuests(userId);
                     }
                 });
+
+            useEffect(() => {
+                const unsub = db
+                        .collection('global')
+                        .doc('weather')
+                        .onSnapshot((doc) => {
+                                if (doc.exists) {
+                                        const data = doc.data();
+                                        const newWeather = data.currentWeather || 'normal';
+
+                                        setCurrentWeather(newWeather);
+                                        setWeatherData({
+                                                richter: data.richter || 0,
+                                                clouds: data.clouds || 0,
+                                                water: data.water || 0
+                                        });
+
+                                        // ⭐ THÔNG BÁO KHI THAY ĐỔI
+                                        if (newWeather !== prevWeather) {
+                                                setMessage(
+                                                        `🌤️ Thời tiết mới: ${getWeatherName(newWeather)}`
+                                                );
+                                                setPrevWeather(newWeather);
+                                                setTimeout(() => setMessage(''), 5000);
+                                        }
+                                } else {
+                                        // Init nếu chưa có
+                                        db.collection('global').doc('weather').set({
+                                                currentWeather: 'normal',
+                                                richter: 0,
+                                                clouds: 0,
+                                                water: 0,
+                                                lastUpdate:
+                                                        firebase.firestore.FieldValue.serverTimestamp(),
+                                                nextUpdate:
+                                                        firebase.firestore.FieldValue.serverTimestamp()
+                                        });
+                                }
+                        });
+
+                return unsub;
+            }, [prevWeather]);
+
+            useEffect(() => {
+                if (!isAdmin) return;
+                const interval = setInterval(async () => {
+                    const doc = await db.collection('global').doc('weather').get();
+                    if (doc.exists) {
+                        const data = doc.data();
+                        const now = Date.now();
+                        if (now > data.nextUpdate?.toMillis()) {
+                            // Random new weather
+                            executeRandomWeather();
+                        }
+                    }
+                }, 300000); // 5p
+                return () => clearInterval(interval);
+            }, []);
 
                 return () => {
                     unsubscribeUser();
@@ -1379,6 +1480,30 @@
                 } catch (error) {
                     console.error('Lỗi khi nhận thưởng:', error);
                 }
+            };
+
+            const executeRandomWeather = async () => {
+                const richter = (Math.random() * 9 + 1).toFixed(1);
+                const clouds = (Math.random() * 9 + 1).toFixed(1);
+                const water = (Math.random() * 9 + 1).toFixed(1);
+
+                let newWeather = 'normal';
+                if (parseFloat(richter) > 5) newWeather = 'earthquake';
+                else if (parseFloat(clouds) > 5) newWeather = 'rainbow';
+                else if (parseFloat(water) > 5) newWeather = 'rain';
+
+                const nextUpdate = Date.now() + 5 * 60 * 1000;
+
+                await db.collection('global').doc('weather').set({
+                    currentWeather: newWeather,
+                    richter,
+                    clouds,
+                    water,
+                    lastUpdate: firebase.firestore.FieldValue.serverTimestamp(),
+                    nextUpdate: firebase.firestore.Timestamp.fromMillis(nextUpdate)
+                });
+
+                setAdminOutput(`✅ Random weather: ${getWeatherName(newWeather)} (Richter:${richter}, Clouds:${clouds}, Water:${water})`);
             };
 
             const saveGameData = async () => {
@@ -1656,6 +1781,83 @@
                 return availableRarities[0];
             };
 
+            const generateFish = () => {
+                let maxRarityIndex = 1; // Common & Uncommon
+
+                if (ownedRods.includes('legendary')) maxRarityIndex = 3;
+                if (ownedRods.includes('mythic')) maxRarityIndex = 4;
+                if (ownedRods.includes('secret')) maxRarityIndex = 5;
+
+                if (fishingOnlySecret && ownedRods.includes('secret')) {
+                        maxRarityIndex = 5; // Chỉ secret nếu mode on
+                }
+
+                const availableRarities = rarities.slice(0, maxRarityIndex + 1);
+                const totalWeight = availableRarities.reduce(
+                        (sum, r) => sum + r.weight,
+                        0
+                );
+
+                let random = Math.random() * totalWeight;
+                let selectedRarity = null;
+
+                for (const rarity of availableRarities) {
+                        if (random < rarity.weight) {
+                                selectedRarity = rarity;
+                                break;
+                        }
+                        random -= rarity.weight;
+                }
+
+                const names = fishNames[selectedRarity.name];
+                const name = names[Math.floor(Math.random() * names.length)];
+
+                let weight = 1.0;
+                let increaseChance = 1.0;
+
+                while (Math.random() < increaseChance) {
+                        weight += 0.1;
+                        increaseChance -= 0.001;
+                }
+
+                weight = Math.round(weight * 10) / 10;
+                const price = Math.round(selectedRarity.price * weight);
+
+                let fish = {
+                        name,
+                        rarity: selectedRarity.name,
+                        weight,
+                        price,
+                        color: selectedRarity.color,
+                        math: generateMathQuestion(
+                                selectedRarity.range,
+                                baitInfo[currentBait].difficulty[selectedRarity.name]
+                        ),
+                        time:
+                                selectedRarity.time +
+                                (tribes[tribe].timeBonus / 100 * selectedRarity.time)
+                };
+
+                // ⭐⭐⭐ GỌI APPLY WEATHER MUTATION ⭐⭐⭐
+                fish = applyWeatherMutation(fish);
+
+                return fish;
+            };
+
+            const applyWeatherMutation = (fish) => {
+                const weather = weatherConfig[currentWeather];
+                if (!weather || !weather.mutation) return fish;
+
+                // Roll mutation
+                if (Math.random() * 100 < weather.rate) {
+                    fish.mutation = weather.mutation;
+                    fish.bonusMultiplier = weather.bonus;
+                    fish.price = Math.round(fish.price * weather.bonus);
+                    fish.name += ` (${weather.mutation.toUpperCase()})`;
+                }
+                return fish;
+            };
+
             const calculateWeight = () => {
                 let weight = 1.0;
                 let increaseChance = 1.0;
@@ -1690,6 +1892,7 @@
                 setMessage('');
                 
                 setTimeout(() => {
+                    const fish = generateFish();
                     const rarity = getRandomRarity();
                     const fishName = fishNames[rarity.name][Math.floor(Math.random() * fishNames[rarity.name].length)];
                     const weight = calculateWeight();
@@ -1750,7 +1953,9 @@
                             price: currentFish.price,
                             color: currentFish.color,
                             favourite: false,
-                            caughtAt: firebase.firestore.FieldValue.serverTimestamp()
+                            caughtAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            mutation: currentFish.mutation || null,  // ⭐⭐⭐ THÊM MUTATION
+                            bonusMultiplier: currentFish.bonusMultiplier || 1  // ⭐⭐⭐ THÊM BONUS
                         });
                         // Thêm cá vào state inventory (không xóa cá cũ)
                         setInventory(prevInventory => [
@@ -1824,6 +2029,10 @@
                     await batch.commit();
 
                     const newMoney = money + totalMoney;
+                    let total = 0;
+                    for (const fish of inventoryToSell) {
+                        total += fish.price;  // Đã có bonus trong price
+                    }
                     updateMoneyWithAnimation(newMoney, totalMoney);
                     await db.collection('users').doc(userId).update({ money: newMoney });
                     // ⭐ THÊM LOG BÁN CÁ
@@ -2160,6 +2369,13 @@
                                     className="w-full py-3 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition mb-4"
                                 >
                                     ▶️ Thực thi lệnh
+                                </button>
+
+                                <button
+                                    onClick={executeRandomWeather}
+                                    className="w-full py-3 bg-orange-600 text-white text-lg font-bold rounded-lg hover:bg-orange-700 transition mb-4"
+                                >
+                                    🌤️ Random Weather (5p)
                                 </button>
 
                                 {adminOutput && (
@@ -2499,196 +2715,186 @@
             }
 
             if (showInventory) {
-                return (
-                    <div
-                      className="min-h-screen bg-cover bg-center p-8"
-                      style={{ backgroundImage: "url('inbackpack.png')" }}
-                    >
-                        {/* Thay thế phần hiển thị money cũ */}
-                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
-                            <p className="text-2xl font-bold text-gray-800">
-                                💰 {formatMoney(Math.floor(displayMoney))} xu
-                            </p>
-                            {showMoneyChange && (
-                                <div 
-                                    className={`absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${
-                                        moneyChange > 0 ? 'text-green-500' : 'text-red-500'
-                                    }`}
-                                    style={{
-                                        animation: 'slideUp 2s ease-out forwards'
-                                    }}
-                                >
-                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
-                                </div>
-                            )}
-                        </div>
-                        
-                        <div className="max-w-6xl mx-auto">
-                            <div className="bg-white rounded-lg shadow-2xl p-6">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-3xl font-bold text-gray-800">🎒 Balo</h2>
-                                    <button
-                                        onClick={() => {
-                                            setShowInventory(false);
-                                            setInventoryTab('fish');
-                                        }}
-                                        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-                                    >
-                                        Quay lại
-                                    </button>
-                                </div>
-
-                                <div className="flex gap-2 mb-6">
-                                    <button
-                                        onClick={() => setInventoryTab('fish')}
-                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
-                                            inventoryTab === 'fish' 
-                                                ? 'bg-blue-600 text-white' 
-                                                : 'bg-gray-300 text-gray-700'
-                                        }`}
-                                    >
-                                        🐟 Cá ({inventory.length})
-                                    </button>
-                                    <button
-                                        onClick={() => setInventoryTab('rods')}
-                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
-                                            inventoryTab === 'rods' 
-                                                ? 'bg-blue-600 text-white' 
-                                                : 'bg-gray-300 text-gray-700'
-                                        }`}
-                                    >
-                                        🎣 Cần câu ({ownedRods.length})
-                                    </button>
-                                    <button
-                                        onClick={() => setInventoryTab('baits')}
-                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
-                                            inventoryTab === 'baits' 
-                                                ? 'bg-blue-600 text-white' 
-                                                : 'bg-gray-300 text-gray-700'
-                                        }`}
-                                    >
-                                        🪱 Mồi câu ({ownedBaits.length})
-                                    </button>
-                                </div>
-                                
-                                {inventoryTab === 'fish' ? (
-                                    <div>
-                                        {inventory.length === 0 ? (
-                                            <p className="text-center text-gray-500 text-xl py-12">Chưa có cá nào trong balo!</p>
-                                        ) : (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                {inventory.map((fish) => (
-                                                    <div
-                                                        key={fish.id}
-                                                        className="border-4 rounded-lg p-4 relative"
-                                                        style={{ borderColor: fish.color }}
-                                                    >
-                                                        <button
-                                                            onClick={() => toggleFavourite(fish.id, fish.favourite)}
-                                                            className="absolute top-2 right-2 text-3xl hover:scale-110 transition"
-                                                        >
-                                                            {fish.favourite ? '⭐' : '☆'}
-                                                        </button>
-                                                        
-                                                        <div className="flex items-center gap-3 mb-2">
-                                                            <FishIcon size={32} color={fish.color} />
-                                                            <h3 className="text-xl font-bold" style={{ color: fish.color }}>
-                                                                {fish.name}
-                                                            </h3>
-                                                        </div>
-                                                        <div className="space-y-1 text-gray-700">
-                                                            <p><strong>Độ hiếm:</strong> {fish.rarity}</p>
-                                                            <p><strong>Cân nặng:</strong> {fish.weight} kg</p>
-                                                            <p><strong>Giá trị:</strong> {fish.price} xu</p>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : inventoryTab === 'rods' ? (
-                                    <div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {ownedRods.map((rodType, index) => (
-                                                <div
-                                                    key={index}
-                                                    className="border-4 rounded-lg p-6 relative"
-                                                    style={{ borderColor: getRodColor(rodType) }}
-                                                >
-                                                    {fishingRod === rodType && (
-                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                                                            ✓ Đang dùng
-                                                        </div>
-                                                    )}
-                                                    
-                                                    <div className="text-center mb-4">
-                                                        <div className="text-5xl mb-2">🎣</div>
-                                                        <h3 className="text-xl font-bold mb-2" style={{ color: getRodColor(rodType) }}>
-                                                            {getRodNameByType(rodType)}
-                                                        </h3>
-                                                        <p className="text-gray-600 text-sm mb-4">
-                                                            {getRodDescription(rodType)}
-                                                        </p>
-                                                    </div>
-                                                    
-                                                    {fishingRod !== rodType && (
-                                                        <button
-                                                            onClick={() => equipRod(rodType)}
-                                                            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                                                        >
-                                                            Trang bị
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                            {ownedBaits.map((baitType, index) => {
-                                                const bait = baitInfo[baitType];
-                                                return (
-                                                    <div
-                                                        key={index}
-                                                        className="border-4 rounded-lg p-6 relative"
-                                                        style={{ borderColor: bait.color }}
-                                                    >
-                                                        {currentBait === baitType && (
-                                                            <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                                                                ✓ Đang dùng
-                                                            </div>
-                                                        )}
-                                                        
-                                                        <div className="text-center mb-4">
-                                                            <div className="text-5xl mb-2">{bait.icon}</div>
-                                                            <h3 className="text-xl font-bold mb-2" style={{ color: bait.color }}>
-                                                                {bait.name}
-                                                            </h3>
-                                                            <p className="text-gray-600 text-sm mb-4">
-                                                                {bait.description}
-                                                            </p>
-                                                        </div>
-                                                        
-                                                        {currentBait !== baitType && (
-                                                            <button
-                                                                onClick={() => equipBait(baitType)}
-                                                                className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                                                            >
-                                                                Trang bị
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                );
-            }
+                return (
+                    <div
+                      className="min-h-screen bg-cover bg-center p-8"
+                      style={{ backgroundImage: "url('inbackpack.png')" }}
+                    >
+                        {/* Thay thế phần hiển thị money cũ */}
+                        <div className="fixed top-4 right-4 bg-yellow-400 px-6 py-3 rounded-lg shadow-lg z-50">
+                            <p className="text-2xl font-bold text-gray-800">
+                                💰 {formatMoney(Math.floor(displayMoney))} xu
+                            </p>
+                            {showMoneyChange && (
+                                <div
+                                    className={absolute -bottom-8 right-0 text-xl font-bold animate-bounce ${ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;moneyChange > 0 ? 'text-green-500' : 'text-red-500' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}}
+                                    style={{
+                                        animation: 'slideUp 2s ease-out forwards'
+                                    }}
+                                >
+                                    {moneyChange > 0 ? '+' : ''}{formatMoney(moneyChange)}
+                                </div>
+                            )}
+                        </div>
+                       
+                        <div className="max-w-6xl mx-auto">
+                            <div className="bg-white rounded-lg shadow-2xl p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-3xl font-bold text-gray-800">🎒 Balo</h2>
+                                    <button
+                                        onClick={() => {
+                                            setShowInventory(false);
+                                            setInventoryTab('fish');
+                                        }}
+                                        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                    >
+                                        Quay lại
+                                    </button>
+                                </div>
+                                <div className="flex gap-2 mb-6">
+                                    <button
+                                        onClick={() => setInventoryTab('fish')}
+                                        className={flex-1 py-3 rounded-lg font-bold transition ${ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inventoryTab === 'fish' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;? 'bg-blue-600 text-white' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 'bg-gray-300 text-gray-700' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}}
+                                    >
+                                        🐟 Cá ({inventory.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setInventoryTab('rods')}
+                                        className={flex-1 py-3 rounded-lg font-bold transition ${ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inventoryTab === 'rods' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;? 'bg-blue-600 text-white' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 'bg-gray-300 text-gray-700' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}}
+                                    >
+                                        🎣 Cần câu ({ownedRods.length})
+                                    </button>
+                                    <button
+                                        onClick={() => setInventoryTab('baits')}
+                                        className={flex-1 py-3 rounded-lg font-bold transition ${ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inventoryTab === 'baits' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;? 'bg-blue-600 text-white' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: 'bg-gray-300 text-gray-700' &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}}
+                                    >
+                                        🪱 Mồi câu ({ownedBaits.length})
+                                    </button>
+                                </div>
+                               
+                                {inventoryTab === 'fish' ? (
+                                    <div>
+                                        {inventory.length === 0 ? (
+                                            <p className="text-center text-gray-500 text-xl py-12">Chưa có cá nào trong balo!</p>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {inventory.map((fish) => (
+                                                    <div
+                                                        key={fish.id}
+                                                        className="border-4 rounded-lg p-4 relative"
+                                                        style={{ borderColor: fish.color }}
+                                                    >
+                                                        <button
+                                                            onClick={() => toggleFavourite(fish.id, fish.favourite)}
+                                                            className="absolute top-2 right-2 text-3xl hover:scale-110 transition"
+                                                        >
+                                                            {fish.favourite ? '⭐' : '☆'}
+                                                        </button>
+                                                       
+                                                        <div className="flex items-center gap-3 mb-2">
+                                                            <FishIcon size={32} color={fish.color} />
+                                                            <h3 className="text-xl font-bold" style={{ color: fish.color }}>
+                                                                {fish.name}
+                                                            </h3>
+                                                        </div>
+                                                        <div className="space-y-1 text-gray-700">
+                                                            <p><strong>Độ hiếm:</strong> {fish.rarity}</p>
+                                                            <p><strong>Cân nặng:</strong> {fish.weight} kg</p>
+                                                            <p><strong>Giá trị:</strong> {fish.price} xu</p>
+                                                            {fish.mutation && (
+                                                                <p className="text-sm font-bold mt-1" style={{ color: weatherConfig[currentWeather]?.color }}>
+                                                                    ✨ Mutation: {fish.mutation} (+{((fish.bonusMultiplier - 1) * 100)}%)
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : inventoryTab === 'rods' ? (
+                                    <div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {ownedRods.map((rodType, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="border-4 rounded-lg p-6 relative"
+                                                    style={{ borderColor: getRodColor(rodType) }}
+                                                >
+                                                    {fishingRod === rodType && (
+                                                        <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            ✓ Đang dùng
+                                                        </div>
+                                                    )}
+                                                   
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-5xl mb-2">🎣</div>
+                                                        <h3 className="text-xl font-bold mb-2" style={{ color: getRodColor(rodType) }}>
+                                                            {getRodNameByType(rodType)}
+                                                        </h3>
+                                                        <p className="text-gray-600 text-sm mb-4">
+                                                            {getRodDescription(rodType)}
+                                                        </p>
+                                                    </div>
+                                                   
+                                                    {fishingRod !== rodType && (
+                                                        <button
+                                                            onClick={() => equipRod(rodType)}
+                                                            className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                        >
+                                                            Trang bị
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            {ownedBaits.map((baitType, index) => {
+                                                const bait = baitInfo[baitType];
+                                                return (
+                                                    <div
+                                                        key={index}
+                                                        className="border-4 rounded-lg p-6 relative"
+                                                        style={{ borderColor: bait.color }}
+                                                    >
+                                                        {currentBait === baitType && (
+                                                            <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                                ✓ Đang dùng
+                                                            </div>
+                                                        )}
+                                                       
+                                                        <div className="text-center mb-4">
+                                                            <div className="text-5xl mb-2">{bait.icon}</div>
+                                                            <h3 className="text-xl font-bold mb-2" style={{ color: bait.color }}>
+                                                                {bait.name}
+                                                            </h3>
+                                                            <p className="text-gray-600 text-sm mb-4">
+                                                                {bait.description}
+                                                            </p>
+                                                        </div>
+                                                       
+                                                        {currentBait !== baitType && (
+                                                            <button
+                                                                onClick={() => equipBait(baitType)}
+                                                                className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                                            >
+                                                                Trang bị
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
 
             if (showShop) {
                 return (
@@ -3364,16 +3570,21 @@
                         {gameState === 'question' && currentFish && (
                             <div className="bg-white rounded-lg p-8 shadow-2xl max-w-md">
                                 <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: currentFish.color + '20' }}>
-                                    <div className="flex justify-center mb-2">
-                                        <FishIcon size={48} color={currentFish.color} />
+                                        <div className="flex justify-center mb-2">
+                                            <FishIcon size={48} color={currentFish.color} />
+                                        </div>
+                                        <h2 className="text-2xl font-bold mb-2" style={{ color: currentFish.color }}>
+                                            {currentFish.name}
+                                        </h2>
+                                        <p className="text-lg"><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
+                                        <p className="text-lg"><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
+                                        {/* ⭐⭐⭐ HIỂN THỊ MUTATION ⭐⭐⭐ */}
+                                        {currentFish.mutation && (
+                                            <p className="text-sm font-bold mt-1" style={{ color: weatherConfig[currentWeather]?.color }}>
+                                                ✨ Mutation: ⭐{currentFish.mutation} (+{((currentFish.bonusMultiplier - 1) * 100)}%)
+                                            </p>
+                                        )}
                                     </div>
-                                    <h2 className="text-2xl font-bold mb-2" style={{ color: currentFish.color }}>
-                                        {currentFish.name}
-                                    </h2>
-                                    <p className="text-lg"><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
-                                    <p className="text-lg"><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
-                                </div>
-
                                 <div className="my-4 p-4 bg-gray-100 rounded-lg">
                                     <p className="text-sm text-purple-600 font-semibold mb-2">
                                         {baitInfo[currentBait].icon} Sử dụng: {baitInfo[currentBait].name}
@@ -3422,6 +3633,7 @@
     </script>
 </body>
 </html>
+
 
 
 
