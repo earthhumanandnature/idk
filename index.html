@@ -221,6 +221,26 @@
     </div>
     
     <audio id="audioElement" preload="metadata"></audio>
+
+    {/* ⭐ WEATHER BAR - HIỂN THỊ Ở TẤT CẢ TRANG */}
+    {currentWeather && currentWeather !== 'none' && gameState !== 'login' && gameState !== 'banned' && (
+        <div 
+            className="fixed top-20 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3"
+            style={{ backgroundColor: weatherTypes[currentWeather].color }}
+        >
+            <span className="text-3xl">{weatherTypes[currentWeather].icon}</span>
+            <span className="text-white font-bold text-xl">{weatherTypes[currentWeather].name}</span>
+        </div>
+    )}
+    
+    {/* ⭐ WEATHER NOTIFICATION */}
+    {showWeatherNotif && (
+        <div 
+            className="fixed top-32 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-lg shadow-2xl z-50 animate-bounce"
+        >
+            <p className="text-2xl font-bold">{weatherNotification}</p>
+        </div>
+    )}
     
     <div id="root"></div>
 
@@ -546,6 +566,10 @@
             const [showRollPanel, setShowRollPanel] = useState(false); // Panel roll tộc
             const [fishingOnlySecret, setFishingOnlySecret] = useState(false);
             const [deletePassword, setDeletePassword] = useState('');  // Không dùng, nhưng nếu muốn modal thì dùng
+            // ⭐ WEATHER SYSTEM STATE
+            const [currentWeather, setCurrentWeather] = useState(null);
+            const [weatherNotification, setWeatherNotification] = useState('');
+            const [showWeatherNotif, setShowWeatherNotif] = useState(false); 
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -596,6 +620,108 @@
                 'Mythic': ['Cá Rồng Vàng', 'Cá Phượng Hoàng', 'Cá Kỳ Lân', 'Leviathan'],
                 'Secret': ['Cá Thần', 'Poseidon', 'Kraken', 'Cá Rồng Cổ Đại'],
                 'Special(admin)':['Tralalelo Tralala', 'Trippi Troppi Troppa Trippa(shirm)', 'Trippi Troppi Troppa Trippa(frog)']
+            };
+
+            // ⭐ HỆ THỐNG WEATHER
+            const weatherTypes = {
+                'none': {
+                    name: 'Bình Thường',
+                    icon: '☀️',
+                    color: '#FFD700',
+                    mutations: []
+                },
+                'earthquake': {
+                    name: 'Động Đất',
+                    icon: '🌋',
+                    color: '#8B4513',
+                    threshold: 5, // Richter > 5
+                    mutations: [
+                        { name: 'Vảy Rạn Nứt', chance: 30, priceMultiplier: 1.5 },
+                        { name: 'Vảy Đá Hóa', chance: 15, priceMultiplier: 2.0 },
+                        { name: 'Sức Mạnh Địa Chấn', chance: 5, priceMultiplier: 3.0 }
+                    ]
+                },
+                'rainbow': {
+                    name: 'Cầu Vồng',
+                    icon: '🌈',
+                    color: '#FF69B4',
+                    threshold: 5, // Hiệu ứng màu > 5
+                    mutations: [
+                        { name: 'Vảy 7 Màu', chance: 25, priceMultiplier: 1.8 },
+                        { name: 'Ánh Sáng Huyền Ảo', chance: 20, priceMultiplier: 2.2 },
+                        { name: 'Phúc Lành Cầu Vồng', chance: 10, priceMultiplier: 2.8 }
+                    ]
+                },
+                'rain': {
+                    name: 'Mưa',
+                    icon: '🌧️',
+                    color: '#4682B4',
+                    threshold: 5, // Nước > 5
+                    mutations: [
+                        { name: 'Vảy Ướt Át', chance: 35, priceMultiplier: 1.3 },
+                        { name: 'Sinh Lực Mưa', chance: 20, priceMultiplier: 1.7 },
+                        { name: 'Thủy Thần Phù Hộ', chance: 8, priceMultiplier: 2.5 }
+                    ]
+                },
+                'volcano': {
+                    name: 'Núi Lửa Phun Trào',
+                    icon: '🌋',
+                    color: '#FF4500',
+                    adminOnly: true,
+                    mutations: [
+                        { name: 'Vảy Nham Thạch', chance: 40, priceMultiplier: 2.0 },
+                        { name: 'Hỏa Ngục Ấn', chance: 25, priceMultiplier: 3.0 },
+                        { name: 'Linh Hồn Núi Lửa', chance: 15, priceMultiplier: 4.5 }
+                    ]
+                },
+                'blackhole': {
+                    name: 'Hố Đen Vũ Trụ',
+                    icon: '🕳️',
+                    color: '#1a1a2e',
+                    adminOnly: true,
+                    mutations: [
+                        { name: 'Vảy Không Gian', chance: 30, priceMultiplier: 3.5 },
+                        { name: 'Lực Hấp Dẫn Vũ Trụ', chance: 20, priceMultiplier: 5.0 },
+                        { name: 'Sức Mạnh Hố Đen', chance: 10, priceMultiplier: 7.0 }
+                    ]
+                }
+            };
+            
+            // ⭐ HÀM RANDOM WEATHER (5 phút 1 lần)
+            const rollWeather = () => {
+                const richter = Math.random() * 10;
+                const colorEffect = Math.random() * 10;
+                const waterLevel = Math.random() * 10;
+                
+                if (richter > weatherTypes.earthquake.threshold) {
+                    return 'earthquake';
+                } else if (colorEffect > weatherTypes.rainbow.threshold) {
+                    return 'rainbow';
+                } else if (waterLevel > weatherTypes.rain.threshold) {
+                    return 'rain';
+                }
+                return 'none';
+            };
+            
+            // ⭐ HÀM APPLY MUTATION CHO CÁ
+            const applyWeatherMutation = (fish, weather) => {
+                if (!weather || weather === 'none') return fish;
+                
+                const weatherData = weatherTypes[weather];
+                if (!weatherData || !weatherData.mutations) return fish;
+                
+                // Random xem có dính mutation không
+                for (const mutation of weatherData.mutations) {
+                    if (Math.random() * 100 < mutation.chance) {
+                        return {
+                            ...fish,
+                            mutation: mutation.name,
+                            price: Math.round(fish.price * mutation.priceMultiplier)
+                        };
+                    }
+                }
+                
+                return fish;
             };
 
             const baitInfo = {
@@ -1043,6 +1169,27 @@
                         setAdminOutput(`✅ Đã set tộc "${tribes[tribeKey].name}" cho ${targetEmail}`);
                         saveLog('admin_set_race', { tribe: tribes[tribeKey].name, target: targetEmail }, 0);
 
+                    } else if (command === '/setweather') {
+                        if (parts.length !== 2) {
+                            setAdminOutput('❌ Cú pháp: /setweather <none|earthquake|rainbow|rain|volcano|blackhole>');
+                            return;
+                        }
+                        
+                        const weatherKey = parts[1].toLowerCase();
+                        if (!Object.keys(weatherTypes).includes(weatherKey)) {
+                            setAdminOutput('❌ Weather không hợp lệ! (none, earthquake, rainbow, rain, volcano, blackhole)');
+                            return;
+                        }
+                        
+                        await db.collection('server').doc('weather').set({
+                            current: weatherKey,
+                            lastUpdate: firebase.firestore.FieldValue.serverTimestamp(),
+                            setByAdmin: currentUser
+                        }, { merge: true });
+                        
+                        setAdminOutput(`✅ Đã set weather thành "${weatherTypes[weatherKey].name}"`);
+                        saveLog('admin_set_weather', { weather: weatherTypes[weatherKey].name }, 0);
+
                     } else if (command === '/help') {
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
@@ -1205,12 +1352,57 @@
                         // Nếu không tồn tại, init mới
                         checkAndResetQuests(userId);
                     }
+                    const data = doc.data();
+                    const newWeather = data.current || 'none';
+                    const oldWeather = currentWeather;
+                    
+                    setCurrentWeather(newWeather);
+                    
+                    // Thông báo khi weather thay đổi
+                    if (oldWeather !== newWeather && newWeather !== 'none') {
+                        const weatherData = weatherTypes[newWeather];
+                        setWeatherNotification(`🌍 ${weatherData.icon} ${weatherData.name} đang diễn ra!`);
+                        setShowWeatherNotif(true);
+                        setTimeout(() => setShowWeatherNotif(false), 5000);
+                    }
                 });
+
+                // ⭐ WEATHER AUTO-ROLL MỖI 5 PHÚT (CHỈ ADMIN HOẶC SERVER)
+                useEffect(() => {
+                    if (!userId) return;
+                    
+                    const initWeather = async () => {
+                        const weatherDoc = await db.collection('server').doc('weather').get();
+                        if (!weatherDoc.exists) {
+                            // Khởi tạo weather lần đầu
+                            await db.collection('server').doc('weather').set({
+                                current: 'none',
+                                lastUpdate: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+                    };
+                    
+                    initWeather();
+                    
+                    // Chỉ user đầu tiên (hoặc admin) chạy timer
+                    if (isAdmin) {
+                        const weatherTimer = setInterval(async () => {
+                            const newWeather = rollWeather();
+                            await db.collection('server').doc('weather').update({
+                                current: newWeather,
+                                lastUpdate: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        }, 5 * 60 * 1000); // 5 phút
+                        
+                        return () => clearInterval(weatherTimer);
+                    }
+                }, [userId, isAdmin]);
 
                 return () => {
                     unsubscribeUser();
                     unsubscribeInventory();
                     unsubscribeQuests();
+                    unsubscribeWeather();
                 };
             }, [userId, gameState]);  // ⭐ Thêm gameState vào dependency để track thay đổi
 
@@ -1743,26 +1935,31 @@
                         await updateQuestProgress('catch', 1, currentFish.rarity);
 
                         // Thêm cá vào Firestore
+                        const finalFish = applyWeatherMutation(currentFish, currentWeather);
+
                         const docRef = await db.collection('users').doc(userId).collection('inventory').add({
-                            name: currentFish.name,
-                            rarity: currentFish.rarity,
-                            weight: currentFish.weight,
-                            price: currentFish.price,
-                            color: currentFish.color,
+                            name: finalFish.name,
+                            rarity: finalFish.rarity,
+                            weight: finalFish.weight,
+                            price: finalFish.price,
+                            color: finalFish.color,
                             favourite: false,
+                            mutation: finalFish.mutation || null, // ⭐ LƯU MUTATION
                             caughtAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
-                        // Thêm cá vào state inventory (không xóa cá cũ)
+                        
+                        // Thêm vào state inventory
                         setInventory(prevInventory => [
                             ...prevInventory,
                             {
                                 id: docRef.id,
-                                name: currentFish.name,
-                                rarity: currentFish.rarity,
-                                weight: currentFish.weight,
-                                price: currentFish.price,
-                                color: currentFish.color,
-                                favourite: false
+                                name: finalFish.name,
+                                rarity: finalFish.rarity,
+                                weight: finalFish.weight,
+                                price: finalFish.price,
+                                color: finalFish.color,
+                                favourite: false,
+                                mutation: finalFish.mutation || null // ⭐ THÊM MUTATION
                             }
                         ]);
                         // ⭐ THÊM LOG CÂU CÁ (với AWAIT & DEBUG)
@@ -1775,7 +1972,9 @@
                         });
                         console.log('✅ Log catch_fish lưu thành công!'); // DEBUG
 
-                        setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
+
+                        const mutationText = finalFish.mutation ? ` - Mutation: ${finalFish.mutation}` : '';
+                        setMessage(`Chúc mừng! Bạn đã câu được ${finalFish.name} nặng ${finalFish.weight}kg (${finalFish.rarity})${mutationText}`);
 
                         setGameState('result');
                         setTimeout(() => {
@@ -2600,6 +2799,11 @@
                                                             <p><strong>Độ hiếm:</strong> {fish.rarity}</p>
                                                             <p><strong>Cân nặng:</strong> {fish.weight} kg</p>
                                                             <p><strong>Giá trị:</strong> {fish.price} xu</p>
+                                                            {fish.mutation && (
+                                                                <p className="text-sm font-bold mt-2 px-2 py-1 bg-purple-100 rounded" style={{ color: '#9333ea' }}>
+                                                                    ⚡ {fish.mutation}
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -3422,3 +3626,4 @@
     </script>
 </body>
 </html>
+
