@@ -1206,7 +1206,7 @@
                     if (doc.exists) {
                         const data = doc.data();
                         setMoney(data.money || 0);
-                        setDisplayMoney(data.money || 0); // Đồng bộ displayMoney
+                        setDisplayMoney(data.money || 0);
                         setFishingRod(data.fishingRod || 'normal');
                         setOwnedRods(data.ownedRods || ['normal']);
                         setCurrentBait(data.currentBait || 'normal');
@@ -1219,12 +1219,10 @@
 
                         // ⭐⭐⭐ LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
                         if (data.banned === true) {
-                            // User bị ban → chuyển ngay sang trang banned (KHÔNG SIGNOUT)
                             setGameState('banned');
                         } else if (gameState === 'banned') {
-                            // User được unban → quay lại menu REALTIME (và load data)
                             setGameState('menu');
-                            loadGameData(userId); // Reload data để đồng bộ sau unban
+                            loadGameData(userId);
                         }
                     }
                 });
@@ -1245,13 +1243,12 @@
                         setDailyQuests(questData.quests || []);
                         setLastQuestReset(questData.lastReset ? questData.lastReset.toDate() : null);
                     } else {
-                        // Nếu không tồn tại, init mới
                         checkAndResetQuests(userId);
                     }
                 });
 
-            useEffect(() => {
-                const unsub = db.collection('global').doc('weather').onSnapshot((doc) => {
+                // ⭐ CHUYỂN WEATHER LISTENER VÀO ĐÂY
+                const unsubscribeWeather = db.collection('global').doc('weather').onSnapshot((doc) => {
                     if (doc.exists) {
                         const data = doc.data();
                         const newWeather = data.currentWeather || 'normal';
@@ -1280,19 +1277,17 @@
                         }).catch(error => console.error('Init weather error:', error));
                     }
                 });
-                return unsub;
-            }, []);
 
-            useEffect(() => {
-                let interval = null;
+                // ⭐ CHUYỂN ADMIN WEATHER INTERVAL VÀO ĐÂY
+                let weatherInterval = null;
                 if (isAdmin) {
-                    interval = setInterval(async () => {
+                    weatherInterval = setInterval(async () => {
                         try {
                             const doc = await db.collection('global').doc('weather').get();
                             if (doc.exists) {
                                 const data = doc.data();
                                 const now = Date.now();
-                                if (now > data.nextUpdate?.toMillis() || 0) {
+                                if (now > (data.nextUpdate?.toMillis() || 0)) {
                                     // Random new weather
                                     await executeRandomWeather();
                                 }
@@ -1300,19 +1295,18 @@
                         } catch (error) {
                             console.error('Weather interval error:', error);
                         }
-                    }, 300000); // 5p
+                    }, 300000); // 5 phút
                 }
 
-                return () => {
-                    if (interval) clearInterval(interval);
-                };
-            }, [isAdmin]);
+                // ⭐ CLEANUP CHO TẤT CẢ (4 listeners + 1 interval)
                 return () => {
                     unsubscribeUser();
                     unsubscribeInventory();
                     unsubscribeQuests();
+                    unsubscribeWeather();
+                    if (weatherInterval) clearInterval(weatherInterval);
                 };
-            }, [userId, gameState]);  // ⭐ Thêm gameState vào dependency để track thay đổi
+            }, [userId, gameState, isAdmin]); // ⭐ THÊM isAdmin VÀO DEPENDENCY  // ⭐ Thêm gameState vào dependency để track thay đổi
 
             const loadGameData = async (uid) => {
                 try {
