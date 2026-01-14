@@ -546,9 +546,83 @@
             const [showRollPanel, setShowRollPanel] = useState(false); // Panel roll tộc
             const [fishingOnlySecret, setFishingOnlySecret] = useState(false);
             const [deletePassword, setDeletePassword] = useState('');  // Không dùng, nhưng nếu muốn modal thì dùng
-            const [weather, setWeather] = useState({ type: 'Bình thường', mutation: null });
+            // ==========================================
+            // 1. WEATHER SYSTEM STATES (PHẢI Ở ĐẦU COMPONENT)
+            // ==========================================
+            const [weather, setWeather] = useState({ name: 'Bình thường', icon: '☀️', mutation: null, multiplier: 1.0 });
             const [weatherParams, setWeatherParams] = useState({ richter: 0, water: 0, color: 0, clouds: 0 });
             const [weatherTimeLeft, setWeatherTimeLeft] = useState(300);
+            
+            const WEATHER_TYPES = {
+                EARTHQUAKE: { name: 'Động đất', icon: '🌋', mutation: 'Chấn động', multiplier: 1.5 },
+                RAINBOW: { name: 'Cầu vồng', icon: '🌈', mutation: 'Sắc màu', multiplier: 2.0 },
+                RAIN: { name: 'Mưa lớn', icon: '🌧️', mutation: 'Ướt át', multiplier: 1.2 },
+                VOLCANO: { name: 'Núi lửa', icon: '🔥', mutation: 'Dung nham', multiplier: 5.0 },
+                BLACKHOLE: { name: 'Hố đen', icon: '🕳️', mutation: 'Hư vô', multiplier: 10.0 },
+                NORMAL: { name: 'Bình thường', icon: '☀️', mutation: null, multiplier: 1.0 }
+            };
+            
+            // Hàm xoay vòng thời tiết (Helper function - không phải Hook)
+            const rotateWeather = async (forceType = null) => {
+                const params = {
+                    richter: parseFloat((Math.random() * 10).toFixed(1)),
+                    water: parseFloat((Math.random() * 10).toFixed(1)),
+                    color: parseFloat((Math.random() * 10).toFixed(1)),
+                    clouds: Math.floor(Math.random() * 100)
+                };
+            
+                let current = WEATHER_TYPES.NORMAL;
+                if (forceType) {
+                    current = forceType;
+                } else {
+                    if (params.richter > 5) current = WEATHER_TYPES.EARTHQUAKE;
+                    else if (params.color > 5) current = WEATHER_TYPES.RAINBOW;
+                    else if (params.water > 5) current = WEATHER_TYPES.RAIN;
+                }
+            
+                try {
+                    await db.collection('server').doc('weather').set({
+                        params,
+                        current,
+                        nextUpdate: firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000)),
+                        updatedBy: currentUser || 'system'
+                    });
+                } catch (e) { console.error("Lỗi cập nhật thời tiết:", e); }
+            };
+            
+            // ==========================================
+            // 2. WEATHER EFFECTS (PHẢI Ở ĐẦU COMPONENT)
+            // ==========================================
+            useEffect(() => {
+                if (!db) return;
+                const unsub = db.collection('server').doc('weather').onSnapshot((doc) => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        setWeatherParams(data.params);
+                        setWeather(data.current);
+                        const nextUpdate = data.nextUpdate.toDate();
+                        const diff = Math.floor((nextUpdate - new Date()) / 1000);
+                        setWeatherTimeLeft(diff > 0 ? diff : 0);
+                    } else {
+                        rotateWeather();
+                    }
+                });
+                return () => unsub();
+            }, [userId]);
+            
+            useEffect(() => {
+                const timer = setInterval(() => {
+                    setWeatherTimeLeft(prev => {
+                        if (prev <= 1) {
+                            // Chỉ trigger rotate nếu là admin hoặc người chơi đầu tiên để tiết kiệm tài nguyên
+                            if (isAdmin) rotateWeather(); 
+                            return 300;
+                        }
+                        return prev - 1;
+                    });
+                }, 1000);
+                return () => clearInterval(timer);
+            }, [isAdmin]);
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -586,38 +660,6 @@
                 setMoney(limitedAmount);
             };
 
-            {/* WEATHER BAR */}
-            <div className="fixed top-20 right-4 left-4 md:left-auto md:w-80 bg-white/90 backdrop-blur-md rounded-xl shadow-2xl p-4 z-40 border-b-4 border-blue-500">
-                <div className="flex justify-between items-center mb-2">
-                    <span className="text-2xl">{weather.icon}</span>
-                    <span className="font-bold text-lg text-gray-800">{weather.name}</span>
-                    <span className="text-xs bg-gray-200 px-2 py-1 rounded text-gray-500">
-                        {Math.floor(weatherTimeLeft / 60)}:{(weatherTimeLeft % 60).toString().padStart(2, '0')}
-                    </span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-gray-600">
-                    <div className={weatherParams.richter > 5 ? "text-red-500 font-bold" : ""}>
-                         Richter: {weatherParams.richter}
-                    </div>
-                    <div className={weatherParams.water > 5 ? "text-blue-500 font-bold" : ""}>
-                         Nước: {weatherParams.water}
-                    </div>
-                    <div className={weatherParams.color > 5 ? "text-purple-500 font-bold" : ""}>
-                         Sắc màu: {weatherParams.color}
-                    </div>
-                    <div>
-                         Mây: {weatherParams.clouds}%
-                    </div>
-                </div>
-                
-                {weather.mutation && (
-                    <div className="mt-2 text-xs text-center py-1 bg-yellow-100 text-yellow-800 rounded animate-pulse">
-                        ⚠️ Mutation hiện tại: <b>{weather.mutation}</b> (Giá x{weather.multiplier})
-                    </div>
-                )}
-            </div>
-
             // Giới hạn tiền tối đa
             const MAX_MONEY = 1000000000; // 1 tỷ
 
@@ -631,15 +673,6 @@
                 'Mythic': ['Cá Rồng Vàng', 'Cá Phượng Hoàng', 'Cá Kỳ Lân', 'Leviathan'],
                 'Secret': ['Cá Thần', 'Poseidon', 'Kraken', 'Cá Rồng Cổ Đại'],
                 'Special(admin)':['Tralalelo Tralala', 'Trippi Troppi Troppa Trippa(shirm)', 'Trippi Troppi Troppa Trippa(frog)']
-            };
-
-            const WEATHER_TYPES = {
-                EARTHQUAKE: { name: 'Động đất', icon: '🌋', mutation: 'Chấn động', multiplier: 1.5 },
-                RAINBOW: { name: 'Cầu vồng', icon: '🌈', mutation: 'Sắc màu', multiplier: 2.0 },
-                RAIN: { name: 'Mưa lớn', icon: '🌧️', mutation: 'Ướt át', multiplier: 1.2 },
-                VOLCANO: { name: 'Núi lửa', icon: '🔥', mutation: 'Dung nham', multiplier: 5.0 },
-                BLACKHOLE: { name: 'Hố đen', icon: '🕳️', mutation: 'Hư vô', multiplier: 10.0 },
-                NORMAL: { name: 'Bình thường', icon: '☀️', mutation: null, multiplier: 1.0 }
             };
 
             const baitInfo = {
@@ -894,13 +927,6 @@
 
                         setAdminOutput(`✅ Đã tặng "${fishName}" (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
                         saveLog('admin_give_fish', { fish: fishName, weight, target: targetEmail }, fishPrice);
-
-                    } else if (command === '/volcano') {
-                        await rotateWeather(WEATHER_TYPES.VOLCANO);
-                        setAdminOutput('✅ Đã kích hoạt NÚI LỬA phun trào toàn server!');
-                    } else if (command === '/blackhole') {
-                        await rotateWeather(WEATHER_TYPES.BLACKHOLE);
-                        setAdminOutput('✅ Đã kích hoạt HỐ ĐEN VŨ TRỤ toàn server!');
 
                     } else if (command === '/ban') {
                         if (parts.length !== 2) {
@@ -1257,70 +1283,6 @@
                         checkAndResetQuests(userId);
                     }
                 });
-
-                useEffect(() => {
-                    if (!userId) return;
-                
-                    // Lắng nghe dữ liệu thời tiết từ Firestore
-                    const unsub = db.collection('server').doc('weather').onSnapshot((doc) => {
-                        if (doc.exists) {
-                            const data = doc.data();
-                            setWeatherParams(data.params);
-                            setWeather(data.current);
-                            
-                            // Tính toán thời gian còn lại
-                            const nextUpdate = data.nextUpdate.toDate();
-                            const diff = Math.floor((nextUpdate - new Date()) / 1000);
-                            setWeatherTimeLeft(diff > 0 ? diff : 0);
-                        } else {
-                            // Khởi tạo nếu server chưa có dữ liệu
-                            rotateWeather();
-                        }
-                    });
-                
-                    return () => unsub();
-                }, [userId]);
-                
-                // Hàm random thời tiết mới
-                const rotateWeather = async (forceType = null) => {
-                    const params = {
-                        richter: (Math.random() * 10).toFixed(1),
-                        water: (Math.random() * 10).toFixed(1),
-                        color: (Math.random() * 10).toFixed(1),
-                        clouds: Math.floor(Math.random() * 100)
-                    };
-                
-                    let current = WEATHER_TYPES.NORMAL;
-                    if (forceType) {
-                        current = forceType;
-                    } else {
-                        if (params.richter > 5) current = WEATHER_TYPES.EARTHQUAKE;
-                        else if (params.color > 5) current = WEATHER_TYPES.RAINBOW;
-                        else if (params.water > 5) current = WEATHER_TYPES.RAIN;
-                    }
-                
-                    await db.collection('server').doc('weather').set({
-                        params,
-                        current,
-                        nextUpdate: firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000)),
-                        updatedBy: currentUser
-                    });
-                };
-                
-                // Cập nhật countdown mỗi giây
-                useEffect(() => {
-                    const timer = setInterval(() => {
-                        setWeatherTimeLeft(prev => {
-                            if (prev <= 1) {
-                                // Chỉ người dùng "chủ chốt" hoặc admin nên trigger rotate để tránh spam
-                                rotateWeather();
-                                return 300;
-                            }
-                            return prev - 1;
-                        });
-                    }, 1000);
-                    return () => clearInterval(timer);
-                }, []);
 
                 return () => {
                     unsubscribeUser();
@@ -1858,24 +1820,13 @@
                         await updateQuestProgress('catch', 1, currentFish.rarity);
 
                         // Thêm cá vào Firestore
-                        // TRƯỚC KHI LƯU VÀO FIRESTORE TRONG checkAnswer
-                        let finalPrice = currentFish.price;
-                        let mutationName = null;
-                        
-                        // Tỷ lệ 40% dính Mutation nếu thời tiết không bình thường
-                        if (weather.mutation && Math.random() < 0.4) {
-                            mutationName = weather.mutation;
-                            finalPrice = Math.round(finalPrice * weather.multiplier);
-                        }
-                        
-                        // Cập nhật phần db.collection('users')...add({...})
                         const docRef = await db.collection('users').doc(userId).collection('inventory').add({
-                            name: mutationName ? `${mutationName} ${currentFish.name}` : currentFish.name,
+                            name: currentFish.name,
                             rarity: currentFish.rarity,
                             weight: currentFish.weight,
-                            price: finalPrice, // Giá đã nhân mutation
-                            mutation: mutationName,
-                            color: mutationName ? '#FF33E6' : currentFish.color, // Đổi màu nếu có mutation
+                            price: currentFish.price,
+                            color: currentFish.color,
+                            favourite: false,
                             caughtAt: firebase.firestore.FieldValue.serverTimestamp()
                         });
                         // Thêm cá vào state inventory (không xóa cá cũ)
@@ -3360,6 +3311,23 @@
                         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50">
                             <p className="text-xl font-bold">{message}</p>
                         </div>
+                        <div className="fixed top-24 right-4 bg-white/80 backdrop-blur p-3 rounded-lg shadow-lg z-40 border-l-4 border-blue-500 w-64">
+                            <div className="flex justify-between items-center border-b pb-1 mb-2">
+                                <span className="text-xl">{weather.icon} {weather.name}</span>
+                                <span className="text-xs font-mono bg-gray-200 px-1 rounded">
+                                    {Math.floor(weatherTimeLeft/60)}:{(weatherTimeLeft%60).toString().padStart(2,'0')}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1 text-[10px] text-gray-600">
+                                <span className={weatherParams.richter > 5 ? "text-red-500 font-bold" : ""}>Richter: {weatherParams.richter}</span>
+                                <span className={weatherParams.water > 5 ? "text-blue-500 font-bold" : ""}>Nước: {weatherParams.water}</span>
+                            </div>
+                            {weather.mutation && (
+                                <div className="mt-2 text-[10px] bg-yellow-100 text-yellow-800 p-1 rounded text-center animate-pulse">
+                                    ✨ {weather.mutation} (x{weather.multiplier} giá)
+                                </div>
+                            )}
+                        </div>
                     )}
                     
                     {showSellConfirm && (
@@ -3548,4 +3516,3 @@
     </script>
 </body>
 </html>
-
