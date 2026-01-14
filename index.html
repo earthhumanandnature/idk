@@ -1368,35 +1368,45 @@
                 });
 
                 // ⭐ WEATHER AUTO-ROLL MỖI 5 PHÚT (CHỈ ADMIN HOẶC SERVER)
+                // ⭐ WEATHER INIT (Chạy 1 lần khi login)
                 useEffect(() => {
                     if (!userId) return;
                     
                     const initWeather = async () => {
-                        const weatherDoc = await db.collection('server').doc('weather').get();
-                        if (!weatherDoc.exists) {
-                            // Khởi tạo weather lần đầu
-                            await db.collection('server').doc('weather').set({
-                                current: 'none',
-                                lastUpdate: firebase.firestore.FieldValue.serverTimestamp()
-                            });
+                        try {
+                            const weatherDoc = await db.collection('server').doc('weather').get();
+                            if (!weatherDoc.exists) {
+                                await db.collection('server').doc('weather').set({
+                                    current: 'none',
+                                    lastUpdate: firebase.firestore.FieldValue.serverTimestamp()
+                                });
+                            }
+                        } catch (error) {
+                            console.error('Lỗi init weather:', error);
                         }
                     };
                     
                     initWeather();
+                }, [userId]);
+                
+                // ⭐ WEATHER AUTO-ROLL (Chỉ admin)
+                useEffect(() => {
+                    if (!isAdmin) return;
                     
-                    // Chỉ user đầu tiên (hoặc admin) chạy timer
-                    if (isAdmin) {
-                        const weatherTimer = setInterval(async () => {
+                    const weatherTimer = setInterval(async () => {
+                        try {
                             const newWeather = rollWeather();
                             await db.collection('server').doc('weather').update({
                                 current: newWeather,
                                 lastUpdate: firebase.firestore.FieldValue.serverTimestamp()
                             });
-                        }, 5 * 60 * 1000); // 5 phút
-                        
-                        return () => clearInterval(weatherTimer);
-                    }
-                }, [userId, isAdmin]);
+                        } catch (error) {
+                            console.error('Lỗi update weather:', error);
+                        }
+                    }, 5 * 60 * 1000); // 5 phút
+                    
+                    return () => clearInterval(weatherTimer);
+                }, [isAdmin]);
 
                 return () => {
                     unsubscribeUser();
@@ -3626,4 +3636,5 @@
     </script>
 </body>
 </html>
+
 
