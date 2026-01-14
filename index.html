@@ -1284,25 +1284,28 @@
             }, []);
 
             useEffect(() => {
-                if (!isAdmin) return; // ⭐ Di chuyển if vào trong để unconditional hook call
-
-                const interval = setInterval(async () => {
-                    try {
-                        const doc = await db.collection('global').doc('weather').get();
-                        if (doc.exists) {
-                            const data = doc.data();
-                            const now = Date.now();
-                            if (now > data.nextUpdate?.toMillis() || 0) {
-                                // Random new weather
-                                await executeRandomWeather();
+                let interval = null;
+                if (isAdmin) {
+                    interval = setInterval(async () => {
+                        try {
+                            const doc = await db.collection('global').doc('weather').get();
+                            if (doc.exists) {
+                                const data = doc.data();
+                                const now = Date.now();
+                                if (now > data.nextUpdate?.toMillis() || 0) {
+                                    // Random new weather
+                                    await executeRandomWeather();
+                                }
                             }
+                        } catch (error) {
+                            console.error('Weather interval error:', error);
                         }
-                    } catch (error) {
-                        console.error('Weather interval error:', error);
-                    }
-                }, 300000); // 5p
+                    }, 300000); // 5p
+                }
 
-                return () => clearInterval(interval);
+                return () => {
+                    if (interval) clearInterval(interval);
+                };
             }, [isAdmin]);
                 return () => {
                     unsubscribeUser();
@@ -3644,6 +3647,7 @@
     </script>
 </body>
 </html>
+
 
 
 
