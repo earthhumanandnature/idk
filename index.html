@@ -732,22 +732,38 @@
                     : (docData?.nextUpdateAt && typeof docData.nextUpdateAt.toDate === 'function'
                         ? docData.nextUpdateAt.toDate().getTime()
                         : 0);
+                const nextRandomAtMs = docData?.nextRandomAt && typeof docData.nextRandomAt.toDate === 'function'
+                    ? docData.nextRandomAt.toDate().getTime()
+                    : 0;
                 const key = getEffectiveWeatherKeyFromDoc(docData);
                 const def = weatherDefs[key] || weatherDefs.clear;
+                const isExpired = expiresAtMs && Date.now() >= expiresAtMs;
+                const isWaiting = isExpired && nextRandomAtMs && Date.now() < nextRandomAtMs;
+                const displayKey = isExpired ? 'clear' : key;
+                const displayDef = weatherDefs[displayKey] || weatherDefs.clear;
                 return {
-                    key,
-                    name: def.name,
-                    multiplier: def.multiplier,
-                    mutation: def.mutation,
-                    isAdminWeather: def.isAdminWeather,
-                    waterLevel,
-                    sunLevel,
-                    atmosphereLevel,
-                    expiresAtMs
+                    key: displayKey,
+                    name: isExpired ? 'Không có weather' : displayDef.name,
+                    multiplier: isExpired ? 1 : displayDef.multiplier,
+                    mutation: isExpired ? 'Khô' : displayDef.mutation,
+                    isAdminWeather: false,
+                    waterLevel: isExpired ? 0 : waterLevel,
+                    sunLevel: isExpired ? 0 : sunLevel,
+                    atmosphereLevel: isExpired ? 0 : atmosphereLevel,
+                    expiresAtMs,
+                    nextRandomAtMs,
+                    isExpired,
+                    isWaiting
                 };
             };
 
             const getWeatherCountdownText = () => {
+                if (currentWeather?.isWaiting && currentWeather?.nextRandomAtMs) {
+                    const remainingSeconds = Math.max(0, Math.ceil((currentWeather.nextRandomAtMs - weatherNowMs) / 1000));
+                    const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
+                    const ss = String(remainingSeconds % 60).padStart(2, '0');
+                    return `${mm}:${ss}`;
+                }
                 const expiresAtMs = currentWeather?.expiresAtMs || 0;
                 if (!expiresAtMs) return '00:00';
                 const remainingSeconds = Math.max(0, Math.ceil((expiresAtMs - weatherNowMs) / 1000));
@@ -771,6 +787,7 @@
                     const snap = await weatherRef.get();
                     if (!snap.exists) {
                         const expiresAt = new Date(Date.now() + WEATHER_DURATION_MS);
+                        const nextRandomAt = new Date(Date.now() + 2 * WEATHER_DURATION_MS);
                         await weatherRef.set({
                             waterLevel: 0,
                             sunLevel: 0,
@@ -778,6 +795,7 @@
                             autoWeatherKey: 'clear',
                             expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
                             nextUpdateAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                            nextRandomAt: firebase.firestore.Timestamp.fromDate(nextRandomAt),
                             adminOverride: { active: false },
                             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -789,10 +807,12 @@
                     const patch = {};
                     if (typeof data.sunLevel !== 'number') patch.sunLevel = 0;
                     if (typeof data.atmosphereLevel !== 'number') patch.atmosphereLevel = 0;
-                    if (!data.expiresAt) {
+                    if (!data.expiresAt || !data.nextRandomAt) {
                         const expiresAt = new Date(Date.now() + WEATHER_DURATION_MS);
+                        const nextRandomAt = new Date(Date.now() + 2 * WEATHER_DURATION_MS);
                         patch.expiresAt = firebase.firestore.Timestamp.fromDate(expiresAt);
                         patch.nextUpdateAt = firebase.firestore.Timestamp.fromDate(expiresAt);
+                        patch.nextRandomAt = firebase.firestore.Timestamp.fromDate(nextRandomAt);
                     }
                     if (Object.keys(patch).length > 0) {
                         patch.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
@@ -815,9 +835,13 @@
                             : (data.nextUpdateAt && typeof data.nextUpdateAt.toDate === 'function'
                                 ? data.nextUpdateAt.toDate().getTime()
                                 : 0);
+                        const nextRandomAtMs = data.nextRandomAt && typeof data.nextRandomAt.toDate === 'function'
+                            ? data.nextRandomAt.toDate().getTime()
+                            : 0;
 
                         if (adminOverride && adminOverride.active === true) {
                             if (expiresAtMs && nowMs < expiresAtMs) return;
+                            // Admin weather expired: clear admin and set expired state
                             tx.set(weatherRef, {
                                 adminOverride: {
                                     active: false,
@@ -825,26 +849,46 @@
                                     setBy: adminOverride.setBy || null,
                                     setAt: adminOverride.setAt || null
                                 },
+                                waterLevel: 0,
+                                sunLevel: 0,
+                                atmosphereLevel: 0,
+                                autoWeatherKey: 'clear',
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            }, { merge: true });
+                            return;
+                        }
+
+                        // Normal weather logic
+                        if (!expiresAtMs || nowMs < expiresAtMs) return;
+
+                        // Weather expired, check if we should random new levels
+                        if (!nextRandomAtMs || nowMs >= nextRandomAtMs) {
+                            const waterLevel = generateLevel();
+                            const sunLevel = generateLevel();
+                            const atmosphereLevel = generateLevel();
+                            const autoWeatherKey = getAutoWeatherKeyFromLevels(waterLevel, sunLevel, atmosphereLevel);
+                            const expiresAt = new Date(nowMs + WEATHER_DURATION_MS);
+                            const nextRandomAt = new Date(nowMs + 2 * WEATHER_DURATION_MS);
+                            tx.set(weatherRef, {
+                                waterLevel,
+                                sunLevel,
+                                atmosphereLevel,
+                                autoWeatherKey,
+                                expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                                nextUpdateAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                                nextRandomAt: firebase.firestore.Timestamp.fromDate(nextRandomAt),
                                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                             }, { merge: true });
                         } else {
-                            if (expiresAtMs && nowMs < expiresAtMs) return;
+                            // Expired but still waiting period; ensure levels are zero
+                            tx.set(weatherRef, {
+                                waterLevel: 0,
+                                sunLevel: 0,
+                                atmosphereLevel: 0,
+                                autoWeatherKey: 'clear',
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            }, { merge: true });
                         }
-
-                        const waterLevel = generateLevel();
-                        const sunLevel = generateLevel();
-                        const atmosphereLevel = generateLevel();
-                        const autoWeatherKey = getAutoWeatherKeyFromLevels(waterLevel, sunLevel, atmosphereLevel);
-                        const next = new Date(nowMs + WEATHER_DURATION_MS);
-                        tx.set(weatherRef, {
-                            waterLevel,
-                            sunLevel,
-                            atmosphereLevel,
-                            autoWeatherKey,
-                            expiresAt: firebase.firestore.Timestamp.fromDate(next),
-                            nextUpdateAt: firebase.firestore.Timestamp.fromDate(next),
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        }, { merge: true });
                     });
                 } catch (e) {
                 }
@@ -1499,12 +1543,20 @@
             useEffect(() => {
                 if (!userId) return;
                 const expiresAtMs = currentWeather?.expiresAtMs || 0;
-                if (!expiresAtMs) return;
-                if (weatherNowMs < expiresAtMs) return;
-                if (weatherExpiryHandledRef.current === expiresAtMs) return;
-                weatherExpiryHandledRef.current = expiresAtMs;
-                tickWeatherIfNeeded();
-            }, [userId, weatherNowMs, currentWeather?.expiresAtMs]);
+                const nextRandomAtMs = currentWeather?.nextRandomAtMs || 0;
+                const now = weatherNowMs;
+                // Trigger when weather expires (enter waiting state)
+                if (expiresAtMs && now >= expiresAtMs && weatherExpiryHandledRef.current !== expiresAtMs) {
+                    weatherExpiryHandledRef.current = expiresAtMs;
+                    tickWeatherIfNeeded();
+                    return;
+                }
+                // Trigger when waiting period ends (random new weather)
+                if (nextRandomAtMs && now >= nextRandomAtMs && weatherExpiryHandledRef.current !== nextRandomAtMs) {
+                    weatherExpiryHandledRef.current = nextRandomAtMs;
+                    tickWeatherIfNeeded();
+                }
+            }, [userId, weatherNowMs, currentWeather?.expiresAtMs, currentWeather?.nextRandomAtMs]);
 
             const loadGameData = async (uid) => {
                 try {
@@ -3661,7 +3713,15 @@
                                     <p className="text-lg font-semibold text-gray-800">
                                         🌦️ Weather: <span className="text-purple-700">{currentWeather?.name || '...'}</span>
                                         <span className="mx-2">|</span>
-                                        ⏳ Còn: <span className="text-red-700">{getWeatherCountdownText()}</span>
+                                        {currentWeather?.isWaiting ? (
+                                            <>
+                                                ⏳ Chờ weather mới: <span className="text-orange-700">{getWeatherCountdownText()}</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                ⏳ Còn: <span className="text-red-700">{getWeatherCountdownText()}</span>
+                                            </>
+                                        )}
                                         <span className="mx-2">|</span>
                                         💧 Nước: <span className="text-blue-700">{currentWeather?.waterLevel ?? 0}/10</span>
                                         <span className="mx-2">|</span>
@@ -3719,7 +3779,7 @@
                                         {baitInfo[currentBait].icon} Sử dụng: {baitInfo[currentBait].name}
                                     </p>
                                     <p className="text-sm text-blue-600 font-semibold mb-2">
-                                        🌦️ Weather: {currentWeather?.name || '...'} | ⏳ Còn: {getWeatherCountdownText()}
+                                        🌦️ Weather: {currentWeather?.name || '...'} | {currentWeather?.isWaiting ? `⏳ Chờ weather mới: ${getWeatherCountdownText()}` : `⏳ Còn: ${getWeatherCountdownText()}`}
                                     </p>
                                     <p className="text-3xl font-bold text-gray-800 mb-4">
                                         {currentFish.math.question} = ?
