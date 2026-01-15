@@ -566,8 +566,11 @@
                 { name: 'Legendary', weight: 20, range: 40, time: 8, color: '#A855F7', price: 20 },
                 { name: 'Mythic', weight: 10, range: 50, time: 9, color: '#EF4444', price: 25 },
                 { name: 'Secret', weight: 1, range: 60, time: 10, color: '#F59E0B', price: 30 },
-                { name: 'Special(admin)', weight: 0, range: 0, time: 0, color: '#FFD700', price: NaN }
+                { name: 'Special(admin)', weight: 0, range: 0, time: 0, color: '#FFD700', price: 1000000000 }
             ];
+
+            // Giới hạn tiền tối đa
+            const MAX_MONEY = 1000000000; // 1 tỷ
 
             // Format số tiền
             const formatMoney = (amount) => {
@@ -594,9 +597,6 @@
     
                 setMoney(limitedAmount);
             };
-
-            // Giới hạn tiền tối đa
-            const MAX_MONEY = 1000000000; // 1 tỷ
 
             const isAdmin = currentUser === 'vvt158214@gmail.com';
 
@@ -1081,12 +1081,29 @@
                 try {
                     if (command === '/givefish') {
                         if (parts.length < 3) {
-                            setAdminOutput('❌ Cú pháp: /givefish <tên cá> <email>');
+                            setAdminOutput('❌ Cú pháp: /givefish <tên cá> <email> [mutation1,mutation2,...]');
                             return;
                         }
 
-                        const fishName = parts.slice(1, -1).join(' ');
-                        const targetEmail = parts[parts.length - 1];
+                        // Tìm email (phần tử cuối cùng chứa @)
+                        const emailIndex = parts.findIndex((part, idx) => idx > 0 && part.includes('@'));
+                        if (emailIndex === -1) {
+                            setAdminOutput('❌ Không tìm thấy email hợp lệ!');
+                            return;
+                        }
+                        const fishName = parts.slice(1, emailIndex).join(' ');
+                        const targetEmail = parts[emailIndex];
+                        // Xử lý mutation tùy chọn (phần sau email)
+                        let mutations = [];
+                        if (parts.length > emailIndex + 1) {
+                            const mutationParts = parts.slice(emailIndex + 1);
+                            const mutationStr = mutationParts.join(' ');
+                            if (mutationStr.includes(',')) {
+                                mutations = mutationStr.split(',').map(m => m.trim()).filter(Boolean);
+                            } else {
+                                mutations = [mutationStr.trim()].filter(Boolean);
+                            }
+                        }
                         const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
                         
                         if (usersSnapshot.empty) {
@@ -1121,7 +1138,7 @@
                         // ⭐ TÍNH GIÁ THEO CÂN NẶNG
                         const fishPrice = Math.round(basePrice * weight);
 
-                        await db.collection('users').doc(targetUserId).collection('inventory').add({
+                        const fishData = {
                             name: fishName,
                             rarity: fishRarity,
                             weight: weight,
@@ -1130,10 +1147,16 @@
                             favourite: false,
                             caughtAt: firebase.firestore.FieldValue.serverTimestamp(),
                             adminGiven: true
-                        });
+                        };
+                        if (mutations.length > 0) {
+                            fishData.mutation = mutations.join(' + ');
+                        }
 
-                        setAdminOutput(`✅ Đã tặng "${fishName}" (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
-                        saveLog('admin_give_fish', { fish: fishName, weight, target: targetEmail }, fishPrice);
+                        await db.collection('users').doc(targetUserId).collection('inventory').add(fishData);
+
+                        const mutationStr = mutations.length > 0 ? ` (${mutations.join(' + ')})` : '';
+                        setAdminOutput(`✅ Đã tặng "${fishName}"${mutationStr} (${weight}kg, ${fishPrice} xu) cho ${targetEmail}`);
+                        saveLog('admin_give_fish', { fish: fishName, weight, target: targetEmail, mutations }, fishPrice);
 
                     } else if (command === '/ban') {
                         if (parts.length !== 2) {
@@ -1228,7 +1251,12 @@
 
                         const targetUserId = usersSnapshot.docs[0].id;
                         const userData = usersSnapshot.docs[0].data();
-                        const newMoney = (userData.money || 0) + amount;
+                        const currentMoney = userData.money || 0;
+                        if (currentMoney >= MAX_MONEY) {
+                            setAdminOutput(`❌ ${targetEmail} đã đạt mức tiền tối đa (${formatMoney(MAX_MONEY)}). Không thể tặng thêm!`);
+                            return;
+                        }
+                        const newMoney = Math.min(currentMoney + amount, MAX_MONEY);
 
                         await db.collection('users').doc(targetUserId).update({ money: newMoney });
 
@@ -1409,8 +1437,10 @@
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
                         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                        /givefish <tên cá> <email>
+                        /givefish <tên cá> <email> [mutation1,mutation2,...]
                           → Tặng cá cho BẤT KỲ người chơi nào
+                          → Có thể chọn nhiều mutation, ngăn cách bởi dấu phẩy
+                          → VD: /givefish Cá Rồng player@gmail.com Lấp lánh,Nóng
                           → VD: /givefish Cá Rồng player@gmail.com
 
                         /givemoney <số xu> <email>
@@ -2250,6 +2280,11 @@
             const sellFish = async () => {
                 const fishToSell = inventory.filter(fish => !fish.favourite);
                 const totalMoney = fishToSell.reduce((sum, fish) => sum + fish.price, 0);
+                const newMoney = money + totalMoney;
+                if (newMoney > MAX_MONEY) {
+                    alert(`Bạn đã đạt mức tiền tối đa (${formatMoney(MAX_MONEY)}). Không thể bán thêm cá!`);
+                    return;
+                }
     
                 try {
                     const batch = db.batch();
@@ -2259,7 +2294,6 @@
                     });
                     await batch.commit();
 
-                    const newMoney = money + totalMoney;
                     updateMoneyWithAnimation(newMoney, totalMoney);
                     await db.collection('users').doc(userId).update({ money: newMoney });
                     // ⭐ THÊM LOG BÁN CÁ
@@ -2568,7 +2602,7 @@
                                 <div className="mb-6 p-4 bg-blue-50 rounded-lg">
                                     <h3 className="font-bold mb-2">📋 Danh sách lệnh:</h3>
                                     <div className="text-sm text-gray-700 space-y-1">
-                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/givefish &lt;tên cá&gt; &lt;email&gt;</code> - Tặng cá cho người chơi</p>
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/givefish &lt;tên cá&gt; &lt;email&gt; [mutation1,mutation2,...]</code> - Tặng cá cho người chơi (có thể chọn mutation)</p>
                                         <p><code className="bg-gray-200 px-2 py-1 rounded">/givemoney &lt;số xu&gt; &lt;email&gt;</code> - Tặng xu cho người chơi</p>
                                         <p><code className="bg-gray-200 px-2 py-1 rounded">/giverod &lt;legendary|mythic|secret&gt; &lt;email&gt;</code> - Tặng cần câu</p>
                                         <p><code className="bg-gray-200 px-2 py-1 rounded">/ban &lt;email&gt;</code> - Ban người chơi</p>
@@ -2586,7 +2620,7 @@
                                         value={adminCommand}
                                         onChange={(e) => setAdminCommand(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && executeAdminCommand()}
-                                        placeholder="Nhập lệnh... (ví dụ: /givefish Cá Rồng abc@gmail.com)"
+                                        placeholder="Nhập lệnh... (ví dụ: /givefish Cá Rồng abc@gmail.com Lấp lánh,Nóng)"
                                         className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
                                     />
                                 </div>
@@ -2805,7 +2839,7 @@
                                 <div className="mb-6 p-4 bg-blue-50 rounded-lg">
                                     <h3 className="font-bold mb-2">📋 Danh sách lệnh:</h3>
                                     <div className="text-sm text-gray-700 space-y-1">
-                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/givefish &lt;tên cá&gt; &lt;email&gt;</code> - Tặng cá cho người chơi</p>
+                                        <p><code className="bg-gray-200 px-2 py-1 rounded">/givefish &lt;tên cá&gt; &lt;email&gt; [mutation1,mutation2,...]</code> - Tặng cá cho người chơi (có thể chọn mutation)</p>
                                         <p><code className="bg-gray-200 px-2 py-1 rounded">/givemoney &lt;số xu&gt; &lt;email&gt;</code> - Tặng xu cho người chơi</p>
                                         <p><code className="bg-gray-200 px-2 py-1 rounded">/giverod &lt;legendary|mythic|secret&gt; &lt;email&gt;</code> - Tặng cần câu</p>
                                         <p><code className="bg-gray-200 px-2 py-1 rounded">/help</code> - Hiển thị trợ giúp</p>
@@ -2818,7 +2852,7 @@
                                         value={adminCommand}
                                         onChange={(e) => setAdminCommand(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && executeAdminCommand()}
-                                        placeholder="Nhập lệnh... (ví dụ: /givefish Cá Rồng test@gmail.com)"
+                                        placeholder="Nhập lệnh... (ví dụ: /givefish Cá Rồng test@gmail.com Lấp lánh,Nóng)"
                                         className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600"
                                     />
                                 </div>
