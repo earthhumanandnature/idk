@@ -741,11 +741,34 @@
                 const isWaiting = isExpired && nextRandomAtMs && Date.now() < nextRandomAtMs;
                 const displayKey = isExpired ? 'clear' : key;
                 const displayDef = weatherDefs[displayKey] || weatherDefs.clear;
+
+                // Xử lý addedWeathers (stack)
+                const rawAdded = docData?.addedWeathers || [];
+                const now = Date.now();
+                const activeAdded = rawAdded
+                    .map(item => ({
+                        ...item,
+                        expiresAtMs: item.expiresAt && typeof item.expiresAt.toDate === 'function' ? item.expiresAt.toDate().getTime() : (item.expiresAtMs || 0)
+                    }))
+                    .filter(item => item.expiresAtMs > now);
+                // Tính tổng hợp multiplier và mutation từ addedWeathers
+                let totalMultiplier = displayDef.multiplier;
+                let mutations = [];
+                if (displayDef.mutation && displayDef.mutation !== 'Khô') mutations.push(displayDef.mutation);
+                activeAdded.forEach(item => {
+                    const wdef = weatherDefs[item.key];
+                    if (wdef) {
+                        totalMultiplier += wdef.multiplier - 1; // cộng dồn
+                        if (wdef.mutation && wdef.mutation !== 'Khô') mutations.push(wdef.mutation);
+                    }
+                });
+                const combinedMutation = mutations.length > 0 ? mutations.join(' + ') : 'Khô';
+
                 return {
                     key: displayKey,
                     name: isExpired ? 'Không có weather' : displayDef.name,
-                    multiplier: isExpired ? 1 : displayDef.multiplier,
-                    mutation: isExpired ? 'Khô' : displayDef.mutation,
+                    multiplier: isExpired ? 1 : totalMultiplier,
+                    mutation: isExpired ? 'Khô' : combinedMutation,
                     isAdminWeather: false,
                     waterLevel: isExpired ? 0 : waterLevel,
                     sunLevel: isExpired ? 0 : sunLevel,
@@ -753,23 +776,24 @@
                     expiresAtMs,
                     nextRandomAtMs,
                     isExpired,
-                    isWaiting
+                    isWaiting,
+                    addedWeathers: activeAdded
                 };
             };
 
-            const getWeatherCountdownText = () => {
-                if (currentWeather?.isWaiting && currentWeather?.nextRandomAtMs) {
-                    const remainingSeconds = Math.max(0, Math.ceil((currentWeather.nextRandomAtMs - weatherNowMs) / 1000));
-                    const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
-                    const ss = String(remainingSeconds % 60).padStart(2, '0');
-                    return `${mm}:${ss}`;
-                }
-                const expiresAtMs = currentWeather?.expiresAtMs || 0;
+            const formatCountdownFromMs = (expiresAtMs) => {
                 if (!expiresAtMs) return '00:00';
                 const remainingSeconds = Math.max(0, Math.ceil((expiresAtMs - weatherNowMs) / 1000));
                 const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
                 const ss = String(remainingSeconds % 60).padStart(2, '0');
                 return `${mm}:${ss}`;
+            };
+
+            const getWeatherCountdownText = () => {
+                if (currentWeather?.isWaiting && currentWeather?.nextRandomAtMs) {
+                    return formatCountdownFromMs(currentWeather.nextRandomAtMs);
+                }
+                return formatCountdownFromMs(currentWeather?.expiresAtMs);
             };
 
             const generateLevel = () => {
@@ -869,6 +893,13 @@
                             const autoWeatherKey = getAutoWeatherKeyFromLevels(waterLevel, sunLevel, atmosphereLevel);
                             const expiresAt = new Date(nowMs + WEATHER_DURATION_MS);
                             const nextRandomAt = new Date(nowMs + 2 * WEATHER_DURATION_MS);
+                            // Clean expired addedWeathers
+                            const cleanedAdded = (data.addedWeathers || [])
+                                .map(item => ({
+                                    ...item,
+                                    expiresAtMs: item.expiresAt && typeof item.expiresAt.toDate === 'function' ? item.expiresAt.toDate().getTime() : (item.expiresAtMs || 0)
+                                }))
+                                .filter(item => item.expiresAtMs > nowMs);
                             tx.set(weatherRef, {
                                 waterLevel,
                                 sunLevel,
@@ -877,15 +908,23 @@
                                 expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
                                 nextUpdateAt: firebase.firestore.Timestamp.fromDate(expiresAt),
                                 nextRandomAt: firebase.firestore.Timestamp.fromDate(nextRandomAt),
+                                addedWeathers: cleanedAdded,
                                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                             }, { merge: true });
                         } else {
-                            // Expired but still waiting period; ensure levels are zero
+                            // Expired but still waiting period; ensure levels are zero and clean addedWeathers
+                            const cleanedAdded = (data.addedWeathers || [])
+                                .map(item => ({
+                                    ...item,
+                                    expiresAtMs: item.expiresAt && typeof item.expiresAt.toDate === 'function' ? item.expiresAt.toDate().getTime() : (item.expiresAtMs || 0)
+                                }))
+                                .filter(item => item.expiresAtMs > nowMs);
                             tx.set(weatherRef, {
                                 waterLevel: 0,
                                 sunLevel: 0,
                                 atmosphereLevel: 0,
                                 autoWeatherKey: 'clear',
+                                addedWeathers: cleanedAdded,
                                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                             }, { merge: true });
                         }
@@ -1334,6 +1373,38 @@
                         setAdminOutput(`✅ Đã set admin weather: ${weatherDefs[arg].name}`);
                         saveLog('admin_set_weather', { mode: 'on', weather: arg }, 0);
 
+                    } else if (command === '/addweather') {
+                        if (parts.length < 2) {
+                            setAdminOutput('❌ Cú pháp: /addweather <tên> [phút]');
+                            return;
+                        }
+
+                        const weatherKey = parts[1].toLowerCase();
+                        if (!weatherDefs[weatherKey]) {
+                            setAdminOutput('❌ Weather không hợp lệ!');
+                            return;
+                        }
+
+                        const minutes = parts.length >= 3 ? parseInt(parts[2]) : 5;
+                        if (isNaN(minutes) || minutes <= 0) {
+                            setAdminOutput('❌ Thời gian phải là số dương (phút)!');
+                            return;
+                        }
+
+                        const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
+                        await weatherRef.set({
+                            addedWeathers: firebase.firestore.FieldValue.arrayUnion({
+                                key: weatherKey,
+                                expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                                addedBy: currentUser,
+                                addedAt: Date.now()
+                            }),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+
+                        setAdminOutput(`✅ Đã thêm weather ${weatherDefs[weatherKey].name} (${minutes} phút)`);
+                        saveLog('admin_add_weather', { weather: weatherKey, minutes }, 0);
+
                     } else if (command === '/help') {
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
@@ -1373,6 +1444,11 @@
                         /setweather <volcano|blackhole|rainbow|off>
                           → Bật/tắt admin weather
                           → VD: /setweather blackhole
+
+                        /addweather <tên> [phút]
+                          → Thêm weather chồng lên weather hiện tại
+                          → Mỗi weather có thời gian và hiệu ứng riêng
+                          → VD: /addweather volcano 3
 
                         /help - Hiển thị trợ giúp
                         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -3729,6 +3805,19 @@
                                         <span className="mx-2">|</span>
                                         🌫️ Khí quyển: <span className="text-gray-700">{currentWeather?.atmosphereLevel ?? 0}/10</span>
                                     </p>
+                                    {currentWeather?.addedWeathers && currentWeather.addedWeathers.length > 0 && (
+                                        <div className="mt-2 space-y-1">
+                                            <p className="text-sm font-semibold text-indigo-700">🌈 Thêm weather:</p>
+                                            {currentWeather.addedWeathers.map((item, idx) => {
+                                                const wdef = weatherDefs[item.key];
+                                                return (
+                                                    <p key={idx} className="text-sm text-gray-700">
+                                                        • {wdef?.name || item.key} ({formatCountdownFromMs(item.expiresAtMs)})
+                                                    </p>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                     <div className="space-y-2">
                                         <div className="w-full bg-gray-300 rounded-full h-2 overflow-hidden">
                                             <div
@@ -3781,6 +3870,19 @@
                                     <p className="text-sm text-blue-600 font-semibold mb-2">
                                         🌦️ Weather: {currentWeather?.name || '...'} | {currentWeather?.isWaiting ? `⏳ Chờ weather mới: ${getWeatherCountdownText()}` : `⏳ Còn: ${getWeatherCountdownText()}`}
                                     </p>
+                                    {currentWeather?.addedWeathers && currentWeather.addedWeathers.length > 0 && (
+                                        <div className="mb-2 space-y-1">
+                                            <p className="text-xs font-semibold text-indigo-700">🌈 Thêm:</p>
+                                            {currentWeather.addedWeathers.map((item, idx) => {
+                                                const wdef = weatherDefs[item.key];
+                                                return (
+                                                    <p key={idx} className="text-xs text-gray-600">
+                                                        • {wdef?.name || item.key} ({formatCountdownFromMs(item.expiresAtMs)})
+                                                    </p>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                     <p className="text-3xl font-bold text-gray-800 mb-4">
                                         {currentFish.math.question} = ?
                                     </p>
