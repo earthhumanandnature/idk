@@ -519,6 +519,18 @@
             const [ownedRods, setOwnedRods] = useState(['normal']);
             const [currentBait, setCurrentBait] = useState('normal');
             const [ownedBaits, setOwnedBaits] = useState(['normal']);
+            const [weatherDocData, setWeatherDocData] = useState(null);
+            const [currentWeather, setCurrentWeather] = useState({
+                key: 'clear',
+                name: 'Trời quang',
+                multiplier: 1,
+                mutation: 'Khô',
+                isAdminWeather: false,
+                waterLevel: 0,
+                sunLevel: 0,
+                atmosphereLevel: 0,
+                expiresAtMs: 0
+            });
             const [configError, setConfigError] = useState(false);
             const [showLeaderboard, setShowLeaderboard] = useState(false);
             const [leaderboardTab, setLeaderboardTab] = useState('fish');
@@ -588,6 +600,11 @@
 
             const isAdmin = currentUser === 'vvt158214@gmail.com';
 
+            const WEATHER_DURATION_MS = 5 * 60 * 1000;
+            const [weatherNowMs, setWeatherNowMs] = useState(Date.now());
+
+            const weatherRef = db.collection('weather').doc('state');
+
             const fishNames = {
                 'Common': ['Cá Rô', 'Cá Chép', 'Cá Trê', 'Cá Lóc'],
                 'Uncommon': ['Cá Hồi', 'Cá Ngừ', 'Cá Chim', 'Cá Basa'],
@@ -646,6 +663,189 @@
                         'Legendary': 65, 'Mythic': 60, 'Secret': 55,
                         'Special(admin)':0
                     }
+                }
+            };
+
+            const weatherDefs = {
+                clear: { name: 'Trời quang', multiplier: 1, mutation: 'Khô', isAdminWeather: false },
+                cloudy: { name: 'Âm u', multiplier: 1.5, mutation: 'Âm u', isAdminWeather: false },
+                rain: { name: 'Mưa', multiplier: 2, mutation: 'Ướt', isAdminWeather: false },
+                flood: { name: 'Lũ', multiplier: 3, mutation: 'Ngập', isAdminWeather: false },
+                warm: { name: 'Nắng nhẹ', multiplier: 1.3, mutation: 'Ấm', isAdminWeather: false },
+                sunny: { name: 'Nắng', multiplier: 1.8, mutation: 'Nắng', isAdminWeather: false },
+                heatwave: { name: 'Nắng gắt', multiplier: 2.5, mutation: 'Nóng', isAdminWeather: false },
+                atmosphere: { name: 'Khí quyển lạ', multiplier: 1.4, mutation: 'Loãng', isAdminWeather: false },
+                aurora: { name: 'Cực quang', multiplier: 2.2, mutation: 'Cực quang', isAdminWeather: false },
+                atmosstorm: { name: 'Bão khí quyển', multiplier: 3.2, mutation: 'Tĩnh điện', isAdminWeather: false },
+                volcano: { name: 'Núi lửa', multiplier: 5, mutation: 'Cháy', isAdminWeather: true },
+                blackhole: { name: 'Hố đen', multiplier: 10, mutation: 'Hư vô', isAdminWeather: true },
+                rainbow: { name: 'Cầu vồng', multiplier: 4, mutation: 'Lấp lánh', isAdminWeather: true }
+            };
+
+            const getAutoWeatherKeyFromLevels = (waterLevel, sunLevel, atmosphereLevel) => {
+                const w = typeof waterLevel === 'number' ? waterLevel : 0;
+                const s = typeof sunLevel === 'number' ? sunLevel : 0;
+                const a = typeof atmosphereLevel === 'number' ? atmosphereLevel : 0;
+
+                if (w < 3 && s < 3 && a < 3) return 'clear';
+
+                if (w >= s && w >= a) {
+                    if (w >= 9) return 'flood';
+                    if (w >= 6) return 'rain';
+                    if (w >= 3) return 'cloudy';
+                    return 'clear';
+                }
+
+                if (s >= w && s >= a) {
+                    if (s >= 9) return 'heatwave';
+                    if (s >= 6) return 'sunny';
+                    if (s >= 3) return 'warm';
+                    return 'clear';
+                }
+
+                if (a >= 9) return 'atmosstorm';
+                if (a >= 6) return 'aurora';
+                if (a >= 3) return 'atmosphere';
+                return 'clear';
+            };
+
+            const getEffectiveWeatherKeyFromDoc = (docData) => {
+                if (!docData) return 'clear';
+                const adminOverride = docData.adminOverride || { active: false };
+                if (adminOverride && adminOverride.active === true && typeof adminOverride.weatherKey === 'string') {
+                    return adminOverride.weatherKey;
+                }
+                if (typeof docData.autoWeatherKey === 'string') return docData.autoWeatherKey;
+                const waterLevel = typeof docData.waterLevel === 'number' ? docData.waterLevel : 0;
+                const sunLevel = typeof docData.sunLevel === 'number' ? docData.sunLevel : 0;
+                const atmosphereLevel = typeof docData.atmosphereLevel === 'number' ? docData.atmosphereLevel : 0;
+                return getAutoWeatherKeyFromLevels(waterLevel, sunLevel, atmosphereLevel);
+            };
+
+            const buildCurrentWeatherState = (docData) => {
+                const waterLevel = typeof docData?.waterLevel === 'number' ? docData.waterLevel : 0;
+                const sunLevel = typeof docData?.sunLevel === 'number' ? docData.sunLevel : 0;
+                const atmosphereLevel = typeof docData?.atmosphereLevel === 'number' ? docData.atmosphereLevel : 0;
+                const expiresAtMs = docData?.expiresAt && typeof docData.expiresAt.toDate === 'function'
+                    ? docData.expiresAt.toDate().getTime()
+                    : (docData?.nextUpdateAt && typeof docData.nextUpdateAt.toDate === 'function'
+                        ? docData.nextUpdateAt.toDate().getTime()
+                        : 0);
+                const key = getEffectiveWeatherKeyFromDoc(docData);
+                const def = weatherDefs[key] || weatherDefs.clear;
+                return {
+                    key,
+                    name: def.name,
+                    multiplier: def.multiplier,
+                    mutation: def.mutation,
+                    isAdminWeather: def.isAdminWeather,
+                    waterLevel,
+                    sunLevel,
+                    atmosphereLevel,
+                    expiresAtMs
+                };
+            };
+
+            const getWeatherCountdownText = () => {
+                const expiresAtMs = currentWeather?.expiresAtMs || 0;
+                if (!expiresAtMs) return '00:00';
+                const remainingSeconds = Math.max(0, Math.ceil((expiresAtMs - weatherNowMs) / 1000));
+                const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
+                const ss = String(remainingSeconds % 60).padStart(2, '0');
+                return `${mm}:${ss}`;
+            };
+
+            const generateLevel = () => {
+                let level = 0;
+                let chance = 1;
+                while (level < 10 && Math.random() < chance) {
+                    level += 1;
+                    chance = Math.max(0, chance - 0.1);
+                }
+                return level;
+            };
+
+            const ensureWeatherDoc = async () => {
+                try {
+                    const snap = await weatherRef.get();
+                    if (!snap.exists) {
+                        const expiresAt = new Date(Date.now() + WEATHER_DURATION_MS);
+                        await weatherRef.set({
+                            waterLevel: 0,
+                            sunLevel: 0,
+                            atmosphereLevel: 0,
+                            autoWeatherKey: 'clear',
+                            expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                            nextUpdateAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                            adminOverride: { active: false },
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                        return;
+                    }
+
+                    const data = snap.data() || {};
+                    const patch = {};
+                    if (typeof data.sunLevel !== 'number') patch.sunLevel = 0;
+                    if (typeof data.atmosphereLevel !== 'number') patch.atmosphereLevel = 0;
+                    if (!data.expiresAt) {
+                        const expiresAt = new Date(Date.now() + WEATHER_DURATION_MS);
+                        patch.expiresAt = firebase.firestore.Timestamp.fromDate(expiresAt);
+                        patch.nextUpdateAt = firebase.firestore.Timestamp.fromDate(expiresAt);
+                    }
+                    if (Object.keys(patch).length > 0) {
+                        patch.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                        await weatherRef.set(patch, { merge: true });
+                    }
+                } catch (e) {
+                }
+            };
+
+            const tickWeatherIfNeeded = async () => {
+                try {
+                    await db.runTransaction(async (tx) => {
+                        const snap = await tx.get(weatherRef);
+                        if (!snap.exists) return;
+                        const data = snap.data() || {};
+                        const adminOverride = data.adminOverride || { active: false };
+                        const nowMs = Date.now();
+                        const expiresAtMs = data.expiresAt && typeof data.expiresAt.toDate === 'function'
+                            ? data.expiresAt.toDate().getTime()
+                            : (data.nextUpdateAt && typeof data.nextUpdateAt.toDate === 'function'
+                                ? data.nextUpdateAt.toDate().getTime()
+                                : 0);
+
+                        if (adminOverride && adminOverride.active === true) {
+                            if (expiresAtMs && nowMs < expiresAtMs) return;
+                            tx.set(weatherRef, {
+                                adminOverride: {
+                                    active: false,
+                                    weatherKey: firebase.firestore.FieldValue.delete(),
+                                    setBy: adminOverride.setBy || null,
+                                    setAt: adminOverride.setAt || null
+                                },
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            }, { merge: true });
+                        } else {
+                            if (expiresAtMs && nowMs < expiresAtMs) return;
+                        }
+
+                        const waterLevel = generateLevel();
+                        const sunLevel = generateLevel();
+                        const atmosphereLevel = generateLevel();
+                        const autoWeatherKey = getAutoWeatherKeyFromLevels(waterLevel, sunLevel, atmosphereLevel);
+                        const next = new Date(nowMs + WEATHER_DURATION_MS);
+                        tx.set(weatherRef, {
+                            waterLevel,
+                            sunLevel,
+                            atmosphereLevel,
+                            autoWeatherKey,
+                            expiresAt: firebase.firestore.Timestamp.fromDate(next),
+                            nextUpdateAt: firebase.firestore.Timestamp.fromDate(next),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    });
+                } catch (e) {
                 }
             };
 
@@ -1043,6 +1243,52 @@
                         setAdminOutput(`✅ Đã set tộc "${tribes[tribeKey].name}" cho ${targetEmail}`);
                         saveLog('admin_set_race', { tribe: tribes[tribeKey].name, target: targetEmail }, 0);
 
+                    } else if (command === '/setweather') {
+                        if (parts.length !== 2) {
+                            setAdminOutput('❌ Cú pháp: /setweather <tên/off>');
+                            return;
+                        }
+
+                        const arg = parts[1].toLowerCase();
+                        if (arg === 'off') {
+                            const expiresAt = new Date(Date.now() + WEATHER_DURATION_MS);
+                            await weatherRef.set({
+                                adminOverride: {
+                                    active: false,
+                                    weatherKey: firebase.firestore.FieldValue.delete(),
+                                    setBy: currentUser,
+                                    setAt: firebase.firestore.FieldValue.serverTimestamp()
+                                },
+                                expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                                nextUpdateAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            }, { merge: true });
+                            setAdminOutput('✅ Đã tắt admin weather (quay về weather thường).');
+                            saveLog('admin_set_weather', { mode: 'off' }, 0);
+                            return;
+                        }
+
+                        if (!weatherDefs[arg] || weatherDefs[arg].isAdminWeather !== true) {
+                            setAdminOutput('❌ Weather admin không hợp lệ! (volcano, blackhole, rainbow hoặc off)');
+                            return;
+                        }
+
+                        const expiresAt = new Date(Date.now() + WEATHER_DURATION_MS);
+                        await weatherRef.set({
+                            adminOverride: {
+                                active: true,
+                                weatherKey: arg,
+                                setBy: currentUser,
+                                setAt: firebase.firestore.FieldValue.serverTimestamp()
+                            },
+                            expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                            nextUpdateAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+
+                        setAdminOutput(`✅ Đã set admin weather: ${weatherDefs[arg].name}`);
+                        saveLog('admin_set_weather', { mode: 'on', weather: arg }, 0);
+
                     } else if (command === '/help') {
                         setAdminOutput(`
                         📋 Danh sách lệnh Admin:
@@ -1078,6 +1324,10 @@
                         /fishingonlysecret <email> <on/off>
                           → Set người chơi câu được toàn cá secret
                           → VD: /fishingonlysecret player@gmail.com on
+
+                        /setweather <volcano|blackhole|rainbow|off>
+                          → Bật/tắt admin weather
+                          → VD: /setweather blackhole
 
                         /help - Hiển thị trợ giúp
                         ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1213,6 +1463,37 @@
                     unsubscribeQuests();
                 };
             }, [userId, gameState]);  // ⭐ Thêm gameState vào dependency để track thay đổi
+
+            useEffect(() => {
+                if (!userId) return;
+                ensureWeatherDoc();
+                const unsubscribeWeather = weatherRef.onSnapshot((doc) => {
+                    const data = doc.exists ? doc.data() : null;
+                    setWeatherDocData(data);
+                    setCurrentWeather(buildCurrentWeatherState(data));
+                });
+                return () => {
+                    unsubscribeWeather();
+                };
+            }, [userId]);
+
+            useEffect(() => {
+                if (!userId) return;
+                tickWeatherIfNeeded();
+                const interval = setInterval(() => {
+                    tickWeatherIfNeeded();
+                }, 30000);
+                return () => clearInterval(interval);
+            }, [userId]);
+
+            useEffect(() => {
+                if (!userId) return;
+                setWeatherNowMs(Date.now());
+                const interval = setInterval(() => {
+                    setWeatherNowMs(Date.now());
+                }, 1000);
+                return () => clearInterval(interval);
+            }, [userId]);
 
             const loadGameData = async (uid) => {
                 try {
@@ -1694,7 +1975,7 @@
                     const fishName = fishNames[rarity.name][Math.floor(Math.random() * fishNames[rarity.name].length)];
                     const weight = calculateWeight();
                     const math = generateMath(rarity.range, rarity.name);
-                    const fishPrice = Math.round(rarity.price * weight);
+                    const basePrice = Math.round(rarity.price * weight);
                     
                     setCurrentFish({
                         rarity: rarity.name,
@@ -1703,7 +1984,7 @@
                         color: rarity.color,
                         math: math,
                         time: rarity.time,
-                        price: fishPrice,
+                        basePrice: basePrice,
                         favourite: false
                     });
                     
@@ -1742,12 +2023,22 @@
                         // Cập nhật nhiệm vụ câu cá
                         await updateQuestProgress('catch', 1, currentFish.rarity);
 
+                        const mutationRoll = Math.random();
+                        const hasMutation = mutationRoll < 0.5;
+                        const mutation = hasMutation ? (currentWeather?.mutation || null) : null;
+                        const multiplier = hasMutation ? (currentWeather?.multiplier || 1) : 1;
+                        const finalPrice = Math.round((currentFish.basePrice || 0) * multiplier);
+                        const weatherKey = currentWeather?.key || 'clear';
+
                         // Thêm cá vào Firestore
                         const docRef = await db.collection('users').doc(userId).collection('inventory').add({
                             name: currentFish.name,
                             rarity: currentFish.rarity,
                             weight: currentFish.weight,
-                            price: currentFish.price,
+                            price: finalPrice,
+                            mutation: mutation,
+                            weather: weatherKey,
+                            multiplier: multiplier,
                             color: currentFish.color,
                             favourite: false,
                             caughtAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1760,7 +2051,10 @@
                                 name: currentFish.name,
                                 rarity: currentFish.rarity,
                                 weight: currentFish.weight,
-                                price: currentFish.price,
+                                price: finalPrice,
+                                mutation: mutation,
+                                weather: weatherKey,
+                                multiplier: multiplier,
                                 color: currentFish.color,
                                 favourite: false
                             }
@@ -1771,11 +2065,14 @@
                             name: currentFish.name,
                             rarity: currentFish.rarity,
                             weight: currentFish.weight,
-                            price: currentFish.price
+                            price: finalPrice,
+                            mutation: mutation,
+                            weather: weatherKey,
+                            multiplier: multiplier
                         });
                         console.log('✅ Log catch_fish lưu thành công!'); // DEBUG
 
-                        setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity})`);
+                        setMessage(`Chúc mừng! Bạn đã câu được ${currentFish.name} nặng ${currentFish.weight}kg (${currentFish.rarity}) | mutation cá này là: ${mutation ? mutation : 'Không có'}`);
 
                         setGameState('result');
                         setTimeout(() => {
@@ -2600,6 +2897,7 @@
                                                             <p><strong>Độ hiếm:</strong> {fish.rarity}</p>
                                                             <p><strong>Cân nặng:</strong> {fish.weight} kg</p>
                                                             <p><strong>Giá trị:</strong> {fish.price} xu</p>
+                                                            <p><strong>Mutation cá này là:</strong> {fish.mutation ? fish.mutation : 'Không có'}</p>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -3349,6 +3647,37 @@
                                     <p className="text-lg font-semibold text-gray-800">
                                         {baitInfo[currentBait].icon} Mồi: <span className="text-green-600">{baitInfo[currentBait].name}</span>
                                     </p>
+                                    <p className="text-lg font-semibold text-gray-800">
+                                        🌦️ Weather: <span className="text-purple-700">{currentWeather?.name || '...'}</span>
+                                        <span className="mx-2">|</span>
+                                        ⏳ Còn: <span className="text-red-700">{getWeatherCountdownText()}</span>
+                                        <span className="mx-2">|</span>
+                                        💧 Nước: <span className="text-blue-700">{currentWeather?.waterLevel ?? 0}/10</span>
+                                        <span className="mx-2">|</span>
+                                        ☀️ Nắng: <span className="text-yellow-700">{currentWeather?.sunLevel ?? 0}/10</span>
+                                        <span className="mx-2">|</span>
+                                        🌫️ Khí quyển: <span className="text-gray-700">{currentWeather?.atmosphereLevel ?? 0}/10</span>
+                                    </p>
+                                    <div className="space-y-2">
+                                        <div className="w-full bg-gray-300 rounded-full h-2 overflow-hidden">
+                                            <div
+                                                className="bg-blue-600 h-2"
+                                                style={{ width: `${Math.max(0, Math.min(100, ((currentWeather?.waterLevel ?? 0) / 10) * 100))}%` }}
+                                            />
+                                        </div>
+                                        <div className="w-full bg-gray-300 rounded-full h-2 overflow-hidden">
+                                            <div
+                                                className="bg-yellow-500 h-2"
+                                                style={{ width: `${Math.max(0, Math.min(100, ((currentWeather?.sunLevel ?? 0) / 10) * 100))}%` }}
+                                            />
+                                        </div>
+                                        <div className="w-full bg-gray-300 rounded-full h-2 overflow-hidden">
+                                            <div
+                                                className="bg-gray-700 h-2"
+                                                style={{ width: `${Math.max(0, Math.min(100, ((currentWeather?.atmosphereLevel ?? 0) / 10) * 100))}%` }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -3377,6 +3706,9 @@
                                 <div className="my-4 p-4 bg-gray-100 rounded-lg">
                                     <p className="text-sm text-purple-600 font-semibold mb-2">
                                         {baitInfo[currentBait].icon} Sử dụng: {baitInfo[currentBait].name}
+                                    </p>
+                                    <p className="text-sm text-blue-600 font-semibold mb-2">
+                                        🌦️ Weather: {currentWeather?.name || '...'} | ⏳ Còn: {getWeatherCountdownText()}
                                     </p>
                                     <p className="text-3xl font-bold text-gray-800 mb-4">
                                         {currentFish.math.question} = ?
