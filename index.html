@@ -602,6 +602,7 @@
 
             const WEATHER_DURATION_MS = 5 * 60 * 1000;
             const [weatherNowMs, setWeatherNowMs] = useState(Date.now());
+            const weatherExpiryHandledRef = useRef(0);
 
             const weatherRef = db.collection('weather').doc('state');
 
@@ -1494,6 +1495,16 @@
                 }, 1000);
                 return () => clearInterval(interval);
             }, [userId]);
+
+            useEffect(() => {
+                if (!userId) return;
+                const expiresAtMs = currentWeather?.expiresAtMs || 0;
+                if (!expiresAtMs) return;
+                if (weatherNowMs < expiresAtMs) return;
+                if (weatherExpiryHandledRef.current === expiresAtMs) return;
+                weatherExpiryHandledRef.current = expiresAtMs;
+                tickWeatherIfNeeded();
+            }, [userId, weatherNowMs, currentWeather?.expiresAtMs]);
 
             const loadGameData = async (uid) => {
                 try {
