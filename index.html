@@ -1661,6 +1661,7 @@
                 const checkRedirectResult = async () => {
                     try {
                         const result = await auth.getRedirectResult();
+                        console.log('Checking redirect result...');
                         if (result && result.user) {
                             console.log('Google redirect result:', result.user);
                             setIsAnonymous(false);
@@ -1700,7 +1701,15 @@
                     }
                 };
                 
+                // Kiểm tra ngay khi load
                 checkRedirectResult();
+                
+                // Kiểm tra lại sau 1 giây để đảm bảo bắt được redirect
+                const interval = setInterval(() => {
+                    checkRedirectResult();
+                }, 1000);
+                
+                return () => clearInterval(interval);
             }, []);
             // Auto-save game data
             useEffect(() => {
