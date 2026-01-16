@@ -118,6 +118,45 @@
                 transform: scale(1.05);
         }
 
+        /* Glitch effect for Thái Cực Quyền Pháp */
+        @keyframes glitch {
+                0% {
+                        transform: translate(0);
+                        filter: hue-rotate(0deg);
+                }
+                20% {
+                        transform: translate(-2px, 2px);
+                        filter: hue-rotate(90deg);
+                }
+                40% {
+                        transform: translate(-2px, -2px);
+                        filter: hue-rotate(180deg);
+                }
+                60% {
+                        transform: translate(2px, -2px);
+                        filter: hue-rotate(270deg);
+                }
+                80% {
+                        transform: translate(2px, 2px);
+                        filter: hue-rotate(360deg);
+                }
+                100% {
+                        transform: translate(0);
+                        filter: hue-rotate(0deg);
+                }
+        }
+
+        .glitch-text {
+                animation: glitch 0.3s infinite;
+                text-shadow: 2px 2px 0px #ff0000, -2px -2px 0px #00ffff, 2px -2px 0px #ffff00, -2px 2px 0px #ff00ff;
+        }
+
+        .glitch-number {
+                animation: glitch 0.2s infinite;
+                color: #fff;
+                text-shadow: 1px 1px 0px #f00, -1px -1px 0px #0ff, 1px -1px 0px #ff0, -1px 1px 0px #0f0;
+        }
+
         /* Add media query for further mobile adjustments */
         @media (max-width: 640px) {
                 .music-player.expanded {
@@ -507,6 +546,7 @@
             const [answer, setAnswer] = useState('');
             const [timeLeft, setTimeLeft] = useState(0);
             const [inventory, setInventory] = useState([]);
+            const [items, setItems] = useState([]); // Danh sách items
             const [showInventory, setShowInventory] = useState(false);
             const [inventoryTab, setInventoryTab] = useState('fish');
             const [message, setMessage] = useState('');
@@ -558,6 +598,13 @@
             const [showRollPanel, setShowRollPanel] = useState(false); // Panel roll tộc
             const [fishingOnlySecret, setFishingOnlySecret] = useState(false);
             const [deletePassword, setDeletePassword] = useState('');  // Không dùng, nhưng nếu muốn modal thì dùng
+            // State cho Thái Cực Quyền Pháp
+            const [hasTaiChiPower, setHasTaiChiPower] = useState(false);
+            const [showTaiChiCutscene, setShowTaiChiCutscene] = useState(false);
+            const [showTaiChiImage, setShowTaiChiImage] = useState(false);
+            const [taiChiKey, setTaiChiKey] = useState(0); // For force re-render
+            const [isTaiChiActive, setIsTaiChiActive] = useState(false);
+            const [taiChiCooldownUntil, setTaiChiCooldownUntil] = useState(null); // Timestamp cooldown
 
             const rarities = [
                 { name: 'Common', weight: 60, range: 10, time: 3, color: '#9CA3AF', price: 10 },
@@ -794,6 +841,17 @@
                     return formatCountdownFromMs(currentWeather.nextRandomAtMs);
                 }
                 return formatCountdownFromMs(currentWeather?.expiresAtMs);
+            };
+
+            // Định nghĩa items
+            const itemDefs = {
+                'bat_quai_khai_mo': {
+                    name: 'Bát Quái Khai Mở',
+                    description: 'Mở khóa Thái Cực Quyền Pháp - câu cá không cần giải toán',
+                    icon: '☯️',
+                    color: '#FFD700',
+                    usable: true
+                }
             };
 
             const generateLevel = () => {
@@ -1355,6 +1413,40 @@
                         setAdminOutput(`✅ Đã set tộc "${tribes[tribeKey].name}" cho ${targetEmail}`);
                         saveLog('admin_set_race', { tribe: tribes[tribeKey].name, target: targetEmail }, 0);
 
+                    } else if (command === '/giveitem') {
+                        if (parts.length < 3) {
+                            setAdminOutput('❌ Cú pháp: /giveitem <tên item> <email>');
+                            return;
+                        }
+
+                        const itemKey = parts[1].toLowerCase();
+                        if (!Object.keys(itemDefs).includes(itemKey)) {
+                            setAdminOutput(`❌ Item không hợp lệ! (${Object.keys(itemDefs).join(', ')})`);
+                            return;
+                        }
+
+                        // Lấy email từ phần còn lại (có thể chứa khoảng trắng)
+                        const targetEmail = parts.slice(2).join(' ').trim();
+
+                        const usersSnapshot = await db.collection('users').where('email', '==', targetEmail).get();
+    
+                        if (usersSnapshot.empty) {
+                            setAdminOutput(`❌ Không tìm thấy người chơi: ${targetEmail}`);
+                            return;
+                        }
+
+                        const targetUserId = usersSnapshot.docs[0].id;
+                        const newItem = {
+                            id: Date.now().toString(),
+                            key: itemKey,
+                            receivedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+
+                        await db.collection('users').doc(targetUserId).collection('items').doc(newItem.id).set(newItem);
+
+                        setAdminOutput(`✅ Đã tặng item "${itemDefs[itemKey].name}" cho ${targetEmail}`);
+                        saveLog('admin_give_item', { item: itemDefs[itemKey].name, target: targetEmail }, 0);
+
                     } else if (command === '/setweather') {
                         if (parts.length !== 2) {
                             setAdminOutput('❌ Cú pháp: /setweather <tên/off>');
@@ -1462,6 +1554,10 @@
                         /giveroll <số lần roll> <email>
                           → Tặng số lần roll tộc cho người chơi
                           → VD: /giveroll 5 player@gmail.com
+
+                        /giveitem <tên item> <email>
+                          → Tặng item cho người chơi
+                          → VD: /giveitem bat_quai_khai_mo player@gmail.com
 
                         /setrace <tên tộc> <email>
                           → Set tộc cho người chơi (nguoi, ca, nemo, poseidon)
@@ -1574,6 +1670,7 @@
                         setPurchasedRollPacks(data.purchasedRollPacks || { single: 0, five: 0, ten: 0 });
                         setFishingOnlySecret(data.fishingOnlySecret || false);
                         setIsBanned(data.banned || false);
+                        setTaiChiCooldownUntil(data.taiChiCooldownUntil || null);
 
                         // ⭐⭐⭐ LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
                         if (data.banned === true) {
@@ -1630,6 +1727,54 @@
 
             useEffect(() => {
                 if (!userId) return;
+                
+                // Real-time listener for items
+                const unsubscribeItems = db.collection('users').doc(userId).collection('items')
+                    .onSnapshot((snapshot) => {
+                        const itemsList = snapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
+                        setItems(itemsList);
+                    }, (error) => {
+                        console.error('Lỗi khi nghe items:', error);
+                    });
+                
+                return () => {
+                    unsubscribeItems();
+                };
+            }, [userId]);
+
+            useEffect(() => {
+                if (!userId) return;
+                
+                // Check Thái Cực cooldown mỗi giây
+                const checkCooldown = setInterval(() => {
+                    if (taiChiCooldownUntil) {
+                        const now = Date.now();
+                        if (now >= taiChiCooldownUntil) {
+                            // Hết cooldown
+                            setTaiChiCooldownUntil(null);
+                            setHasTaiChiPower(true);
+                            
+                            // Xóa cooldown khỏi Firestore
+                            db.collection('users').doc(userId).update({
+                                taiChiCooldownUntil: firebase.firestore.FieldValue.delete()
+                            }).catch(error => {
+                                console.warn('Không thể xóa cooldown khỏi Firestore:', error);
+                                // Không sao, state local đã được cập nhật
+                            });
+                        }
+                    }
+                }, 1000);
+                
+                return () => {
+                    clearInterval(checkCooldown);
+                };
+            }, [userId, taiChiCooldownUntil]);
+
+            useEffect(() => {
+                if (!userId) return;
                 tickWeatherIfNeeded();
                 const interval = setInterval(() => {
                     tickWeatherIfNeeded();
@@ -1678,6 +1823,7 @@
                         setRollCount(data.rollCount || 0);
                         setPurchasedRollPacks(data.purchasedRollPacks || { single: 0, five: 0, ten: 0 });
                         setFishingOnlySecret(data.fishingOnlySecret || false);
+                        setTaiChiCooldownUntil(data.taiChiCooldownUntil || null);
                     }
 
                     const inventorySnapshot = await db.collection('users').doc(uid).collection('inventory').get();
@@ -1686,6 +1832,44 @@
                         ...doc.data()
                     }));
                     setInventory(fishList);
+
+                    // Load items
+                    const itemsSnapshot = await db.collection('users').doc(uid).collection('items').get();
+                    const itemsList = itemsSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    setItems(itemsList);
+
+                    // Load Thái Cực cooldown
+                    try {
+                        const cooldownDoc = await db.collection('users').doc(uid).get();
+                        const cooldownData = cooldownDoc.data();
+                        if (cooldownData && cooldownData.taiChiCooldownUntil) {
+                            setTaiChiCooldownUntil(cooldownData.taiChiCooldownUntil);
+                            
+                            // Kiểm tra xem đã hết cooldown chưa
+                            const now = Date.now();
+                            if (now >= cooldownData.taiChiCooldownUntil) {
+                                // Đã hết cooldown, xóa và cho sử dụng
+                                try {
+                                    await db.collection('users').doc(uid).update({
+                                        taiChiCooldownUntil: firebase.firestore.FieldValue.delete()
+                                    });
+                                } catch (error) {
+                                    console.warn('Không thể xóa cooldown:', error);
+                                }
+                                setTaiChiCooldownUntil(null);
+                                setHasTaiChiPower(true);
+                            } else {
+                                // Vẫn còn cooldown
+                                setHasTaiChiPower(false);
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('Không thể load cooldown:', error);
+                        // Không làm gì cả, để state mặc định
+                    }
         
                     // Load nhiệm vụ hằng ngày
                     await checkAndResetQuests(uid);
@@ -2165,13 +2349,13 @@
             };
 
             useEffect(() => {
-                if (gameState === 'question' && timeLeft > 0) {
+                if (gameState === 'question' && timeLeft > 0 && !isTaiChiActive) {
                     const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
                     return () => clearTimeout(timer);
-                } else if (gameState === 'question' && timeLeft === 0) {
+                } else if (gameState === 'question' && timeLeft === 0 && !isTaiChiActive) {
                     handleTimeout();
                 }
-            }, [timeLeft, gameState]);
+            }, [timeLeft, gameState, isTaiChiActive]);
 
             const handleTimeout = () => {
                 setMessage('Hụt mất rồi!');
@@ -2274,6 +2458,146 @@
                     setInventory(newInventory);
                 } catch (error) {
                     alert('Lỗi khi cập nhật: ' + error.message);
+                }
+            };
+
+            const useItem = async (itemId) => {
+                try {
+                    const item = items.find(i => i.id === itemId);
+                    if (!item) return;
+
+                    const itemDef = itemDefs[item.key];
+                    if (!itemDef) return;
+
+                    // Xóa item khỏi inventory
+                    await db.collection('users').doc(userId).collection('items').doc(itemId).delete();
+                    setItems(items.filter(i => i.id !== itemId));
+
+                    // Nếu là Bát Quái Khai Mở, kích hoạt Thái Cực Quyền Pháp
+                    if (item.key === 'bat_quai_khai_mo') {
+                        setHasTaiChiPower(true);
+                        alert('Thái Cực Quyền Pháp đã được kích hoạt! Nút sẽ xuất hiện khi câu cá.');
+                    }
+                } catch (error) {
+                    alert('Lỗi khi sử dụng item: ' + error.message);
+                }
+            };
+
+            const activateTaiChiPower = async () => {
+                setIsTaiChiActive(true);
+                setHasTaiChiPower(false);
+                
+                // Dừng timer câu hỏi
+                setTimeLeft(0);
+                
+                // Màn đen 3s
+                setShowTaiChiCutscene(true);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                // Phát video cutscene.mp4
+                const video = document.createElement('video');
+                video.src = 'cutscene.mp4';
+                video.style.position = 'fixed';
+                video.style.top = '0';
+                video.style.left = '0';
+                video.style.width = '100%';
+                video.style.height = '100%';
+                video.style.zIndex = '9999';
+                video.style.objectFit = 'cover';
+                video.autoplay = true;
+                document.body.appendChild(video);
+                
+                await new Promise(resolve => {
+                    video.onended = resolve;
+                });
+                
+                document.body.removeChild(video);
+                
+                // Hiện UI state question với glitch effect và thay đổi giá trị liên tục
+                // Giữ showTaiChiCutscene=true, chỉ thay đổi background opacity
+                setShowTaiChiImage(true);
+                setTaiChiKey(prev => prev + 1); // Force re-render
+                
+                // Bắt đầu thay đổi giá trị liên tục
+                const glitchInterval = setInterval(() => {
+                    // Chọn cá ngẫu nhiên từ danh sách
+                    const randomRarity = rarities[Math.floor(Math.random() * (rarities.length - 1))];
+                    const fishNamesForRarity = fishNames[randomRarity.name];
+                    const randomFishName = fishNamesForRarity[Math.floor(Math.random() * fishNamesForRarity.length)];
+                    const randomWeight = (Math.random() * 10 + 1).toFixed(2);
+                    
+                    // Tạo câu hỏi toán ngẫu nhiên
+                    const randomMath = generateMath(randomRarity.range, randomRarity.name);
+                    
+                    // Cập nhật currentFish với giá trị ngẫu nhiên
+                    setCurrentFish(prev => ({
+                        ...prev,
+                        name: randomFishName,
+                        rarity: randomRarity.name,
+                        weight: parseFloat(randomWeight),
+                        color: randomRarity.color,
+                        math: randomMath
+                    }));
+                }, 100); // Thay đổi mỗi 100ms
+                
+                // Xoay thaicuc.png 4s với hiệu ứng glitch
+                await new Promise(resolve => setTimeout(resolve, 4000));
+                
+                // Dừng thay đổi giá trị
+                clearInterval(glitchInterval);
+                
+                // Màn đen 3s
+                setShowTaiChiImage(false);
+                setShowTaiChiCutscene(true);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                // Về menu và nhận cá
+                setShowTaiChiCutscene(false);
+                setIsTaiChiActive(false);
+                
+                // Tạo cá ngẫu nhiên và thêm vào inventory
+                const finalRarity = rarities[Math.floor(Math.random() * (rarities.length - 1))]; // Loại trừ Special(admin)
+                const finalFishNamesForRarity = fishNames[finalRarity.name];
+                const finalFishName = finalFishNamesForRarity[Math.floor(Math.random() * finalFishNamesForRarity.length)];
+                
+                const newFish = {
+                    id: Date.now().toString(),
+                    name: finalFishName,
+                    rarity: finalRarity.name,
+                    price: finalRarity.price,
+                    caughtAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    favourite: false
+                };
+                
+                await db.collection('users').doc(userId).collection('inventory').doc(newFish.id).set(newFish);
+                setInventory([...inventory, newFish]);
+                
+                setGameState('menu');
+                alert('Câu cá thành công! (Hồi chiêu 1 phút)');
+                
+                // Lưu cooldown vào Firestore và set state
+                const cooldownUntil = Date.now() + 60000; // 1 phút
+                try {
+                    await db.collection('users').doc(userId).update({ 
+                        taiChiCooldownUntil: cooldownUntil 
+                    });
+                    setTaiChiCooldownUntil(cooldownUntil);
+                    setHasTaiChiPower(false);
+                } catch (error) {
+                    console.warn('Không thể lưu cooldown:', error);
+                    // Vẫn set state local để client biết đang cooldown
+                    setTaiChiCooldownUntil(cooldownUntil);
+                    setHasTaiChiPower(false);
+                    // Thử lại lưu sau 5 giây
+                    setTimeout(async () => {
+                        try {
+                            await db.collection('users').doc(userId).update({ 
+                                taiChiCooldownUntil: cooldownUntil 
+                            });
+                        } catch (retryError) {
+                            console.warn('Vẫn không thể lưu cooldown sau khi retry:', retryError);
+                        }
+                    }, 5000);
                 }
             };
 
@@ -3039,6 +3363,16 @@
                                     >
                                         🪱 Mồi câu ({ownedBaits.length})
                                     </button>
+                                    <button
+                                        onClick={() => setInventoryTab('items')}
+                                        className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                            inventoryTab === 'items' 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-300 text-gray-700'
+                                        }`}
+                                    >
+                                        ☯️ Items ({items.length})
+                                    </button>
                                 </div>
                                 
                                 {inventoryTab === 'fish' ? (
@@ -3114,7 +3448,7 @@
                                             ))}
                                         </div>
                                     </div>
-                                ) : (
+                                ) : inventoryTab === 'baits' ? (
                                     <div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                             {ownedBaits.map((baitType, index) => {
@@ -3154,7 +3488,45 @@
                                             })}
                                         </div>
                                     </div>
-                                )}
+                                ) : inventoryTab === 'items' ? (
+                                    <div>
+                                        {items.length === 0 ? (
+                                            <p className="text-center text-gray-500 text-xl py-12">Chưa có item nào!</p>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {items.map((item) => {
+                                                    const itemDef = itemDefs[item.key];
+                                                    return (
+                                                        <div
+                                                            key={item.id}
+                                                            className="border-4 rounded-lg p-6 relative"
+                                                            style={{ borderColor: itemDef.color }}
+                                                        >
+                                                            <div className="text-center mb-4">
+                                                                <div className="text-5xl mb-2">{itemDef.icon}</div>
+                                                                <h3 className="text-xl font-bold mb-2" style={{ color: itemDef.color }}>
+                                                                    {itemDef.name}
+                                                                </h3>
+                                                                <p className="text-gray-600 text-sm mb-4">
+                                                                    {itemDef.description}
+                                                                </p>
+                                                            </div>
+                                                            
+                                                            {itemDef.usable && (
+                                                                <button
+                                                                    onClick={() => useItem(item.id)}
+                                                                    className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+                                                                >
+                                                                    Sử dụng
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
                     </div>
@@ -3890,11 +4262,11 @@
                                     <div className="flex justify-center mb-2">
                                         <FishIcon size={48} color={currentFish.color} />
                                     </div>
-                                    <h2 className="text-2xl font-bold mb-2" style={{ color: currentFish.color }}>
+                                    <h2 className={`text-2xl font-bold mb-2 ${showTaiChiImage ? 'glitch-text' : ''}`} style={{ color: currentFish.color }}>
                                         {currentFish.name}
                                     </h2>
-                                    <p className="text-lg"><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
-                                    <p className="text-lg"><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
+                                    <p className={`text-lg ${showTaiChiImage ? 'glitch-text' : ''}`}><strong>Độ hiếm:</strong> {currentFish.rarity}</p>
+                                    <p className={`text-lg ${showTaiChiImage ? 'glitch-number' : ''}`}><strong>Cân nặng:</strong> {currentFish.weight} kg</p>
                                 </div>
 
                                 <div className="my-4 p-4 bg-gray-100 rounded-lg">
@@ -3917,10 +4289,10 @@
                                             })}
                                         </div>
                                     )}
-                                    <p className="text-3xl font-bold text-gray-800 mb-4">
+                                    <p className={`text-3xl font-bold text-gray-800 mb-4 ${showTaiChiImage ? 'glitch-number' : ''}`}>
                                         {currentFish.math.question} = ?
                                     </p>
-                                    <p className="text-xl text-red-500 font-bold">
+                                    <p className={`text-xl text-red-500 font-bold ${showTaiChiImage ? 'glitch-number' : ''}`}>
                                         Thời gian: {timeLeft}s
                                     </p>
                                 </div>
@@ -3941,6 +4313,15 @@
                                 >
                                     Trả lời
                                 </button>
+
+                                {hasTaiChiPower && (
+                                    <button
+                                        onClick={activateTaiChiPower}
+                                        className="w-full px-6 py-3 bg-purple-600 text-white text-xl rounded-lg hover:bg-purple-700 transition mt-2"
+                                    >
+                                        ☯️ Thái Cực Quyền Pháp
+                                    </button>
+                                )}
                             </div>
                         )}
 
@@ -3949,6 +4330,37 @@
                                 <p className="text-2xl font-bold text-gray-800">
                                     {message}
                                 </p>
+                            </div>
+                        )}
+
+                        {/* Overlay Thái Cực Quyền Pháp */}
+                        {showTaiChiCutscene && (
+                            <div className={`fixed inset-0 z-[9998] flex items-center justify-center ${showTaiChiImage ? 'bg-black bg-opacity-50' : 'bg-black'}`}>
+                                {showTaiChiImage ? (
+                                    // Hiện UI question với overlay thaicuc.png
+                                    <div className="relative w-full h-full">
+                                        <img 
+                                            key={taiChiKey}
+                                            src="thaicuc.png" 
+                                            alt="Thái Cực" 
+                                            className="absolute inset-0 w-64 h-64 m-auto animate-spin"
+                                            style={{ animationDuration: '0.5s' }}
+                                            onError={(e) => {
+                                                // Hiện fallback text nếu ảnh không load được
+                                                e.target.style.display = 'none';
+                                                const fallback = document.createElement('div');
+                                                fallback.innerHTML = '☯️';
+                                                fallback.className = 'absolute inset-0 w-64 h-64 m-auto flex items-center justify-center text-white text-6xl animate-spin';
+                                                fallback.style.animationDuration = '0.5s';
+                                                e.target.parentNode.appendChild(fallback);
+                                            }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="text-white text-2xl animate-pulse">
+                                        Đang kích hoạt Thái Cực Quyền Pháp...
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
