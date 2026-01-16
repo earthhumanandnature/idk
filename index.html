@@ -1654,6 +1654,42 @@
                 });
                 return () => unsubscribe();
             }, []);
+
+            // Xử lý kết quả redirect từ Google
+            useEffect(() => {
+                return auth.getRedirectResult().then((result) => {
+                    if (result && result.user) {
+                        setIsAnonymous(false);
+                        
+                        // Kiểm tra xem user đã tồn tại chưa
+                        const userDoc = db.collection('users').doc(result.user.uid).get();
+                        userDoc.then((doc) => {
+                            if (!doc.exists) {
+                                // Tạo user mới với data mặc định
+                                db.collection('users').doc(result.user.uid).set({
+                                    email: result.user.email,
+                                    money: 1000,
+                                    fishingRod: 'normal',
+                                    ownedRods: ['normal'],
+                                    currentBait: 'normal',
+                                    ownedBaits: ['normal'],
+                                    tribe: 'nguoi',
+                                    rollCount: 3,
+                                    purchasedRollPacks: { single: 0, five: 0, ten: 0 },
+                                    fishingOnlySecret: false,
+                                    banned: false,
+                                    isAnonymous: false,
+                                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                                });
+                            }
+                        });
+                    }
+                }).catch((error) => {
+                    if (error.code !== 'auth/popup-closed-by-user') {
+                        alert('Lỗi đăng nhập Google: ' + error.message);
+                    }
+                });
+            }, []);
             // Auto-save game data
             useEffect(() => {
                 if (userId && gameState === 'menu' && !isAnonymous) {
@@ -2308,31 +2344,13 @@
             const loginWithGoogle = async () => {
                 try {
                     const provider = new firebase.auth.GoogleAuthProvider();
-                    const result = await auth.signInWithPopup(provider);
-                    setIsAnonymous(false);
-                    
-                    // Kiểm tra xem user đã tồn tại chưa
-                    const userDoc = await db.collection('users').doc(result.user.uid).get();
-                    if (!userDoc.exists) {
-                        // Tạo user mới với data mặc định
-                        await db.collection('users').doc(result.user.uid).set({
-                            email: result.user.email,
-                            money: 1000,
-                            fishingRod: 'normal',
-                            ownedRods: ['normal'],
-                            currentBait: 'normal',
-                            ownedBaits: ['normal'],
-                            tribe: 'nguoi',
-                            rollCount: 3,
-                            purchasedRollPacks: { single: 0, five: 0, ten: 0 },
-                            fishingOnlySecret: false,
-                            banned: false,
-                            isAnonymous: false,
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                    }
+                    // Sử dụng redirect thay vì popup để tránh lỗi conflicting popup
+                    await auth.signInWithRedirect(provider);
+                    // Firebase sẽ tự động redirect lại sau khi đăng nhập xong
                 } catch (error) {
-                    alert('Lỗi đăng nhập Google: ' + error.message);
+                    if (error.code !== 'auth/popup-closed-by-user') {
+                        alert('Lỗi đăng nhập Google: ' + error.message);
+                    }
                 }
             };
 
