@@ -588,6 +588,7 @@
             const [showMoneyChange, setShowMoneyChange] = useState(false);
             const [isBanned, setIsBanned] = useState(false);
             const moneyRef = useRef(money); // Ref để lưu giá trị tiền cũ
+            const [isAnonymous, setIsAnonymous] = useState(false); // Theo dõi đăng nhập ẩn danh
             // ⭐ THÊM STATE LOGS
             const [showLogs, setShowLogs] = useState(false);
             const [logsData, setLogsData] = useState([]);
@@ -1627,7 +1628,15 @@
                 const unsubscribe = auth.onAuthStateChanged(async (user) => {
                     if (user) {
                         setUserId(user.uid);
-                        setCurrentUser(user.email);
+                        
+                        // Xác định loại đăng nhập và email hiển thị
+                        if (user.isAnonymous) {
+                            setCurrentUser('Ẩn danh');
+                            setIsAnonymous(true);
+                        } else {
+                            setCurrentUser(user.email);
+                            setIsAnonymous(false);
+                        }
 
                         // ⭐ KIỂM TRA BAN TRƯỚC KHI LOAD DATA
                         const gameDoc = await db.collection('users').doc(user.uid).get();
@@ -1640,19 +1649,20 @@
                         setGameState('menu');
                     } else {
                         setGameState('login');
+                        setIsAnonymous(false);
                     }            
                 });
                 return () => unsubscribe();
             }, []);
             // Auto-save game data
             useEffect(() => {
-                if (userId && gameState === 'menu') {
+                if (userId && gameState === 'menu' && !isAnonymous) {
                     const saveTimer = setTimeout(() => {
                         saveGameData();
                     }, 2000);
                     return () => clearTimeout(saveTimer);
                 }
-            }, [money, fishingRod, ownedRods, currentBait, ownedBaits, userId]);
+            }, [money, fishingRod, ownedRods, currentBait, ownedBaits, userId, isAnonymous]);
 
             useEffect(() => {
                 if (!userId) return;
@@ -2253,6 +2263,79 @@
                 }
             };
 
+            // Login với email/password
+            const login = async (e) => {
+                e.preventDefault();
+                try {
+                    await auth.signInWithEmailAndPassword(email, password);
+                } catch (error) {
+                    alert('Lỗi đăng nhập: ' + error.message);
+                }
+            };
+
+            // Đăng nhập ẩn danh
+            const loginAnonymous = async () => {
+                const confirmAnonymous = confirm('⚠️ CẢNH BÁO: Đăng nhập ẩn danh sẽ không lưu dữ liệu vĩnh viễn!\n\nMọi tiến độ (tiền, cá, cần câu, item...) sẽ bị mất khi bạn thoát.\n\nBạn có chắc chắn muốn tiếp tục?');
+                if (!confirmAnonymous) return;
+                
+                try {
+                    const result = await auth.signInAnonymously();
+                    setIsAnonymous(true);
+                    setCurrentUser('Ẩn danh');
+                    
+                    // Khởi tạo data mặc định cho user ẩn danh
+                    await db.collection('users').doc(result.user.uid).set({
+                        email: 'anonymous',
+                        money: 1000, // Cho 1000 xu ban đầu
+                        fishingRod: 'normal',
+                        ownedRods: ['normal'],
+                        currentBait: 'normal',
+                        ownedBaits: ['normal'],
+                        tribe: 'nguoi',
+                        rollCount: 3,
+                        purchasedRollPacks: { single: 0, five: 0, ten: 0 },
+                        fishingOnlySecret: false,
+                        banned: false,
+                        isAnonymous: true,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (error) {
+                    alert('Lỗi đăng nhập ẩn danh: ' + error.message);
+                }
+            };
+
+            // Đăng nhập bằng Google
+            const loginWithGoogle = async () => {
+                try {
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    const result = await auth.signInWithPopup(provider);
+                    setIsAnonymous(false);
+                    
+                    // Kiểm tra xem user đã tồn tại chưa
+                    const userDoc = await db.collection('users').doc(result.user.uid).get();
+                    if (!userDoc.exists) {
+                        // Tạo user mới với data mặc định
+                        await db.collection('users').doc(result.user.uid).set({
+                            email: result.user.email,
+                            money: 1000,
+                            fishingRod: 'normal',
+                            ownedRods: ['normal'],
+                            currentBait: 'normal',
+                            ownedBaits: ['normal'],
+                            tribe: 'nguoi',
+                            rollCount: 3,
+                            purchasedRollPacks: { single: 0, five: 0, ten: 0 },
+                            fishingOnlySecret: false,
+                            banned: false,
+                            isAnonymous: false,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                } catch (error) {
+                    alert('Lỗi đăng nhập Google: ' + error.message);
+                }
+            };
+
             const handleLogin = async () => {
                 if (!email.trim() || !password) {
                     alert('Vui lòng nhập đầy đủ thông tin!');
@@ -2277,7 +2360,9 @@
 
             const handleLogout = async () => {
                 if (window.confirm('Bạn có chắc muốn đăng xuất?')) {
-                    await saveGameData();
+                    if (!isAnonymous) {
+                        await saveGameData();
+                    }
                     await auth.signOut();
                     setUserId(null);
                     setCurrentUser(null);
@@ -2287,6 +2372,7 @@
                     setPassword('');
                     setConfirmPassword('');
                     setLoginMode('login');
+                    setIsAnonymous(false);
                     setGameState('login');
                 }
             };
@@ -3329,6 +3415,32 @@
                                     >
                                         {loginMode === 'login' ? '🎮 Đăng nhập' : '📝 Đăng ký'}
                                     </button>
+
+                                    <div className="border-t pt-4 mt-6">
+                                        <p className="text-center text-gray-600 mb-4 font-semibold">Hoặc đăng nhập bằng:</p>
+                                        
+                                        <button
+                                            onClick={loginAnonymous}
+                                            className="w-full py-3 bg-gray-600 text-white text-lg font-bold rounded-lg hover:bg-gray-700 transition mb-3"
+                                        >
+                                            🥷 Đăng nhập ẩn danh
+                                        </button>
+                                        
+                                        <button
+                                            onClick={loginWithGoogle}
+                                            className="w-full py-3 bg-red-600 text-white text-lg font-bold rounded-lg hover:bg-red-700 transition"
+                                        >
+                                            🔗 Đăng nhập bằng Google
+                                        </button>
+                                        
+                                        {loginMode === 'login' && (
+                                            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                                <p className="text-xs text-yellow-800 text-center">
+                                                    ⚠️ <strong>Đăng nhập ẩn danh:</strong> Dữ liệu sẽ không được lưu vĩnh viễn và sẽ bị mất khi thoát!
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
                                 </>
                             )}
                         </div>
