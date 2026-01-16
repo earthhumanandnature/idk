@@ -1637,6 +1637,29 @@
                         } else {
                             setCurrentUser(user.email);
                             setIsAnonymous(false);
+                            
+                            // Kiểm tra xem đây là user mới từ Google hay không
+                            const userDoc = await db.collection('users').doc(user.uid).get();
+                            if (!userDoc.exists) {
+                                console.log('Creating new Google user...');
+                                // Tạo user mới với data mặc định
+                                await db.collection('users').doc(user.uid).set({
+                                    email: user.email,
+                                    money: 1000,
+                                    fishingRod: 'normal',
+                                    ownedRods: ['normal'],
+                                    currentBait: 'normal',
+                                    ownedBaits: ['normal'],
+                                    tribe: 'nguoi',
+                                    rollCount: 3,
+                                    purchasedRollPacks: { single: 0, five: 0, ten: 0 },
+                                    fishingOnlySecret: false,
+                                    banned: false,
+                                    isAnonymous: false,
+                                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                                });
+                                console.log('New Google user created');
+                            }
                         }
 
                         // ⭐ KIỂM TRA BAN TRƯỚC KHI LOAD DATA
@@ -1654,68 +1677,6 @@
                     }            
                 });
                 return () => unsubscribe();
-            }, []);
-
-            // Xử lý kết quả redirect từ Google
-            useEffect(() => {
-                let hasProcessed = false;
-                
-                const checkRedirectResult = async () => {
-                    try {
-                        const result = await auth.getRedirectResult();
-                        console.log('Checking redirect result...');
-                        
-                        if (result && result.user && !hasProcessed) {
-                            hasProcessed = true;
-                            console.log('Google redirect result:', result.user);
-                            setIsAnonymous(false);
-                            
-                            // Kiểm tra xem user đã tồn tại chưa
-                            const userDoc = await db.collection('users').doc(result.user.uid).get();
-                            if (!userDoc.exists) {
-                                console.log('Creating new user...');
-                                // Tạo user mới với data mặc định
-                                await db.collection('users').doc(result.user.uid).set({
-                                    email: result.user.email,
-                                    money: 1000,
-                                    fishingRod: 'normal',
-                                    ownedRods: ['normal'],
-                                    currentBait: 'normal',
-                                    ownedBaits: ['normal'],
-                                    tribe: 'nguoi',
-                                    rollCount: 3,
-                                    purchasedRollPacks: { single: 0, five: 0, ten: 0 },
-                                    fishingOnlySecret: false,
-                                    banned: false,
-                                    isAnonymous: false,
-                                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                                });
-                                console.log('New user created');
-                            } else {
-                                console.log('User already exists');
-                            }
-                        } else {
-                            if (!hasProcessed) {
-                                console.log('No redirect result');
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Redirect result error:', error);
-                        if (error.code !== 'auth/popup-closed-by-user') {
-                            alert('Lỗi đăng nhập Google: ' + error.message);
-                        }
-                    }
-                };
-                
-                // Kiểm tra ngay khi load
-                checkRedirectResult();
-                
-                // Chỉ kiểm tra lại trong 5 giây đầu để bắt redirect
-                const timeout = setTimeout(() => {
-                    console.log('Stop checking redirect result');
-                }, 5000);
-                
-                return () => clearTimeout(timeout);
             }, []);
             // Auto-save game data
             useEffect(() => {
