@@ -1658,16 +1658,19 @@
 
             // Xử lý kết quả redirect từ Google
             useEffect(() => {
-                return auth.getRedirectResult().then((result) => {
-                    if (result && result.user) {
-                        setIsAnonymous(false);
-                        
-                        // Kiểm tra xem user đã tồn tại chưa
-                        const userDoc = db.collection('users').doc(result.user.uid).get();
-                        userDoc.then((doc) => {
-                            if (!doc.exists) {
+                const checkRedirectResult = async () => {
+                    try {
+                        const result = await auth.getRedirectResult();
+                        if (result && result.user) {
+                            console.log('Google redirect result:', result.user);
+                            setIsAnonymous(false);
+                            
+                            // Kiểm tra xem user đã tồn tại chưa
+                            const userDoc = await db.collection('users').doc(result.user.uid).get();
+                            if (!userDoc.exists) {
+                                console.log('Creating new user...');
                                 // Tạo user mới với data mặc định
-                                db.collection('users').doc(result.user.uid).set({
+                                await db.collection('users').doc(result.user.uid).set({
                                     email: result.user.email,
                                     money: 1000,
                                     fishingRod: 'normal',
@@ -1682,14 +1685,22 @@
                                     isAnonymous: false,
                                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                                 });
+                                console.log('New user created');
+                            } else {
+                                console.log('User already exists');
                             }
-                        });
+                        } else {
+                            console.log('No redirect result');
+                        }
+                    } catch (error) {
+                        console.error('Redirect result error:', error);
+                        if (error.code !== 'auth/popup-closed-by-user') {
+                            alert('Lỗi đăng nhập Google: ' + error.message);
+                        }
                     }
-                }).catch((error) => {
-                    if (error.code !== 'auth/popup-closed-by-user') {
-                        alert('Lỗi đăng nhập Google: ' + error.message);
-                    }
-                });
+                };
+                
+                checkRedirectResult();
             }, []);
             // Auto-save game data
             useEffect(() => {
