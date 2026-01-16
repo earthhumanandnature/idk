@@ -1658,11 +1658,15 @@
 
             // Xử lý kết quả redirect từ Google
             useEffect(() => {
+                let hasProcessed = false;
+                
                 const checkRedirectResult = async () => {
                     try {
                         const result = await auth.getRedirectResult();
                         console.log('Checking redirect result...');
-                        if (result && result.user) {
+                        
+                        if (result && result.user && !hasProcessed) {
+                            hasProcessed = true;
                             console.log('Google redirect result:', result.user);
                             setIsAnonymous(false);
                             
@@ -1691,7 +1695,9 @@
                                 console.log('User already exists');
                             }
                         } else {
-                            console.log('No redirect result');
+                            if (!hasProcessed) {
+                                console.log('No redirect result');
+                            }
                         }
                     } catch (error) {
                         console.error('Redirect result error:', error);
@@ -1704,12 +1710,12 @@
                 // Kiểm tra ngay khi load
                 checkRedirectResult();
                 
-                // Kiểm tra lại sau 1 giây để đảm bảo bắt được redirect
-                const interval = setInterval(() => {
-                    checkRedirectResult();
-                }, 1000);
+                // Chỉ kiểm tra lại trong 5 giây đầu để bắt redirect
+                const timeout = setTimeout(() => {
+                    console.log('Stop checking redirect result');
+                }, 5000);
                 
-                return () => clearInterval(interval);
+                return () => clearTimeout(timeout);
             }, []);
             // Auto-save game data
             useEffect(() => {
