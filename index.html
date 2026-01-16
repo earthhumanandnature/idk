@@ -587,6 +587,7 @@
             const [moneyChange, setMoneyChange] = useState(0);
             const [showMoneyChange, setShowMoneyChange] = useState(false);
             const [isBanned, setIsBanned] = useState(false);
+            const moneyRef = useRef(money); // Ref để lưu giá trị tiền cũ
             // ⭐ THÊM STATE LOGS
             const [showLogs, setShowLogs] = useState(false);
             const [logsData, setLogsData] = useState([]);
@@ -1600,6 +1601,7 @@
             // Animation số tiền chạy
             useEffect(() => {
                 if (displayMoney !== money) {
+                    moneyRef.current = money; // Cập nhật ref khi money thay đổi
                     const diff = money - displayMoney;
                     const step = diff / 20; // Chia thành 20 bước
         
@@ -1659,8 +1661,14 @@
                 const unsubscribeUser = db.collection('users').doc(userId).onSnapshot((doc) => {
                     if (doc.exists) {
                         const data = doc.data();
-                        setMoney(data.money || 0);
-                        setDisplayMoney(data.money || 0); // Đồng bộ displayMoney
+                        const newMoney = data.money || 0;
+                        
+                        // Chỉ cập nhật money nếu thực sự thay đổi (so sánh với ref)
+                        if (newMoney !== moneyRef.current) {
+                            moneyRef.current = newMoney;
+                            setMoney(newMoney);
+                        }
+                        
                         setFishingRod(data.fishingRod || 'normal');
                         setOwnedRods(data.ownedRods || ['normal']);
                         setCurrentBait(data.currentBait || 'normal');
@@ -1825,7 +1833,13 @@
                     const gameDoc = await db.collection('users').doc(uid).get();
                     if (gameDoc.exists) {
                         const data = gameDoc.data();
-                        setMoney(data.money || 0);
+                        const newMoney = data.money || 0;
+                        
+                        // Chỉ set money và displayMoney khi load lần đầu
+                        moneyRef.current = newMoney;
+                        setMoney(newMoney);
+                        setDisplayMoney(newMoney);
+                        
                         setFishingRod(data.fishingRod || 'normal');
                         setOwnedRods(data.ownedRods || ['normal']);
                         setCurrentBait(data.currentBait || 'normal');
@@ -2519,24 +2533,29 @@
                 setShowTaiChiCutscene(true);
                 await new Promise(resolve => setTimeout(resolve, 3000));
                 
-                // Phát video cutscene.mp4
-                const video = document.createElement('video');
-                video.src = 'cutscene.mp4';
-                video.style.position = 'fixed';
-                video.style.top = '0';
-                video.style.left = '0';
-                video.style.width = '100%';
-                video.style.height = '100%';
-                video.style.zIndex = '9999';
-                video.style.objectFit = 'cover';
-                video.autoplay = true;
-                document.body.appendChild(video);
+                // Hỏi xem có muốn xem cutscene không
+                const wantCutscene = confirm('Bạn có muốn xem cutscene không?');
                 
-                await new Promise(resolve => {
-                    video.onended = resolve;
-                });
-                
-                document.body.removeChild(video);
+                if (wantCutscene) {
+                    // Phát video cutscene.mp4
+                    const video = document.createElement('video');
+                    video.src = 'cutscene.mp4';
+                    video.style.position = 'fixed';
+                    video.style.top = '0';
+                    video.style.left = '0';
+                    video.style.width = '100%';
+                    video.style.height = '100%';
+                    video.style.zIndex = '9999';
+                    video.style.objectFit = 'cover';
+                    video.autoplay = true;
+                    document.body.appendChild(video);
+                    
+                    await new Promise(resolve => {
+                        video.onended = resolve;
+                    });
+                    
+                    document.body.removeChild(video);
+                }
                 
                 // Hiện UI state question với glitch effect và thay đổi giá trị liên tục
                 // Giữ showTaiChiCutscene=true, chỉ thay đổi background opacity
