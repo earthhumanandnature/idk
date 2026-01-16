@@ -1671,6 +1671,17 @@
                         setFishingOnlySecret(data.fishingOnlySecret || false);
                         setIsBanned(data.banned || false);
                         setTaiChiCooldownUntil(data.taiChiCooldownUntil || null);
+                        
+                        // Kiểm tra hasUsedTaiChi và cooldown để set hasTaiChiPower
+                        if (data.hasUsedTaiChi && !data.taiChiCooldownUntil) {
+                            // Đã từng dùng Thái Cực và không có cooldown
+                            const now = Date.now();
+                            if (!data.taiChiCooldownUntil || now >= data.taiChiCooldownUntil) {
+                                setHasTaiChiPower(true);
+                            } else {
+                                setHasTaiChiPower(false);
+                            }
+                        }
 
                         // ⭐⭐⭐ LOGIC REALTIME BAN/UNBAN ⭐⭐⭐
                         if (data.banned === true) {
@@ -1864,6 +1875,12 @@
                             } else {
                                 // Vẫn còn cooldown
                                 setHasTaiChiPower(false);
+                            }
+                        } else {
+                            // Không có cooldown, kiểm tra xem đã từng sử dụng Thái Cực chưa
+                            if (cooldownData && cooldownData.hasUsedTaiChi) {
+                                // Đã từng dùng Thái Cực và không có cooldown = có thể dùng
+                                setHasTaiChiPower(true);
                             }
                         }
                     } catch (error) {
@@ -2476,6 +2493,14 @@
                     // Nếu là Bát Quái Khai Mở, kích hoạt Thái Cực Quyền Pháp
                     if (item.key === 'bat_quai_khai_mo') {
                         setHasTaiChiPower(true);
+                        // Lưu flag đã từng sử dụng Thái Cực
+                        try {
+                            await db.collection('users').doc(userId).update({
+                                hasUsedTaiChi: true
+                            });
+                        } catch (error) {
+                            console.warn('Không thể lưu hasUsedTaiChi:', error);
+                        }
                         alert('Thái Cực Quyền Pháp đã được kích hoạt! Nút sẽ xuất hiện khi câu cá.');
                     }
                 } catch (error) {
